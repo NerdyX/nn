@@ -37,5 +37,8 @@
     "undici": "^7.19.2",
     "vite": "7.2.6",
     "vite-tsconfig-paths": "^4.3.2"
+  },
+  "dependencies": {
+    "qwik": "^1.0.57"
   }
 }

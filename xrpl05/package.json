@@ -30,11 +30,15 @@
 		"@builder.io/qwik-city": "^1.18.0",
 		"@cloudflare/workers-types": "^4.20260131.0",
 		"@eslint/js": "latest",
+		"@tailwindcss/postcss": "^4.1.18",
 		"@types/node": "^25.1.0",
+		"autoprefixer": "^10.4.24",
 		"eslint": "9.32.0",
 		"eslint-plugin-qwik": "^1.18.0",
 		"globals": "16.4.0",
+		"postcss": "^8.5.6",
 		"prettier": "3.6.2",
+		"tailwindcss": "^4.1.18",
 		"typescript": "5.4.5",
 		"typescript-eslint": "8.38.0",
 		"typescript-plugin-css-modules": "latest",
@@ -42,5 +46,11 @@
 		"vite": "7.2.6",
 		"vite-tsconfig-paths": "^4.2.1",
 		"wrangler": "^3.0.0"
+	},
+	"dependencies": {
+		"@tailwindcss/vite": "^4.1.18",
+		"xaman": "^1.0.0",
+		"xrpl": "^4.5.0",
+		"xumm": "^1.8.0"
 	}
 }

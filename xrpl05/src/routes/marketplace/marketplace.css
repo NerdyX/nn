@@ -1,0 +1,123 @@
+/* marketplace.css */
+
+/* Body / background */
+body {
+  background: linear-gradient(to bottom, #0f0f1a, #1a1a2e);
+  color: white;
+  font-family: "Inter", sans-serif;
+}
+
+/* Header */
+header {
+  backdrop-filter: blur(12px);
+  background-color: rgba(15, 15, 25, 0.7);
+  border-bottom: 1px solid rgba(100, 100, 120, 0.6);
+}
+
+/* Search bar */
+input[type="text"] {
+  border-radius: 1rem;
+  border: 1px solid #444;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  color: black;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.3);
+}
+
+/* NFT cards */
+group {
+  background-color: rgba(15, 15, 25, 0.6);
+  border: 1px solid #222;
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+group:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3);
+}
+
+group img {
+  transition: transform 0.7s ease;
+}
+
+group:hover img {
+  transform: scale(1.1);
+}
+
+/* Card details */
+group h3 {
+  font-weight: 600;
+  font-size: 1.125rem;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+group p {
+  font-size: 0.875rem;
+  color: #c084fc;
+  margin-bottom: 0.25rem;
+}
+
+/* Modal */
+.fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+fixed img {
+  border-radius: 1rem;
+}
+
+fixed button {
+  cursor: pointer;
+}
+
+fixed button:hover {
+  opacity: 0.8;
+}
+
+/* Buttons */
+button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #555;
+  background-color: #111;
+  color: white;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background-color: #333;
+}
+
+/* Footer */
+footer {
+  margin-top: 4rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #999;
+}
+
+/* Pagination */
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

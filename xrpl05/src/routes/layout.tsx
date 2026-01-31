@@ -1,26 +1,71 @@
-import { component$, Slot, useStyles$ } from "@builder.io/qwik";
+import {
+  component$,
+  Signal,
+  Slot,
+  createContextId,
+  useContextProvider,
+  useSignal,
+  useTask$,
+} from "@builder.io/qwik";
 import { routeLoader$ } from "@builder.io/qwik-city";
+import { Header } from "../components/header/header";
 
-import Header from "../components/starter/header/header";
-import Footer from "../components/starter/footer/footer";
+export const NetworkContext = createContextId<{
+  activeNetwork: Signal<"xrpl" | "xahau">;
+}>("network-context");
 
-import styles from "./styles.css?inline";
+export const useXamanSession = routeLoader$(async ({ cookie }) => {
+  const jwt = cookie.get("xaman_jwt")?.value;
 
-export const useServerTimeLoader = routeLoader$(() => {
-  return {
-    date: new Date().toISOString(),
-  };
+  if (!jwt) {
+    return { connected: false, address: null, name: null };
+  }
+
+  try {
+    const res = await fetch("https://oauth2.xaman.app/userinfo", {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+      },
+    });
+
+    if (!res.ok) {
+      cookie.delete("xaman_jwt", { path: "/" });
+      return { connected: false, address: null, name: null };
+    }
+  } catch (err) {
+    console.error("Xaman session validation failed:", err);
+    cookie.delete("xaman_jwt", { path: "/" });
+    return { connected: false, address: null, name: null };
+  }
 });
 
 export default component$(() => {
-  useStyles$(styles);
+  const activeNetwork = useSignal<"xrpl" | "xahau">(() => {
+    if (typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem("preferredNetwork");
+      return saved === "xahau" ? "xahau" : "xrpl";
+    }
+    return "xrpl";
+  });
+
+  useContextProvider(NetworkContext, { activeNetwork });
+
+  useTask$(({ track }) => {
+    track(() => activeNetwork.value);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("preferredNetwork", activeNetwork.value);
+    }
+  });
+
   return (
     <>
-      <Header />
-      <main>
+      <main class="flex flex-col min-h-screen">
+        <Header />
         <Slot />
       </main>
-      <Footer />
+      <footer class="text-center font-extralight mb-1.5 mt-auto">
+        <a href="https://nrdxlab.com">Created by {"{NRDX}"}Labs</a>
+      </footer>
     </>
   );
 });

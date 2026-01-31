@@ -1,112 +1,122 @@
 import { component$ } from "@builder.io/qwik";
 import type { DocumentHead } from "@builder.io/qwik-city";
 
-import Counter from "../components/starter/counter/counter";
-import Hero from "../components/starter/hero/hero";
-import Infobox from "../components/starter/infobox/infobox";
-import Starter from "../components/starter/next-steps/next-steps";
-
 export default component$(() => {
   return (
-    <>
-      <Hero />
-      <Starter />
+    <main class="mx-auto max-w-7xl px-full py-full">
+      {/* Hero */}
+      <section class="relative min-h-screen overflow-hidden">
+        {/* Video */}
+        <video
+          class="absolute inset-0 w-full h-full object-cover"
+          autoplay
+          muted
+          loop
+          preload="metadata"
+        >
+          <source src="/media/bg_vid.mp4" type="video/mp4" />
+        </video>
 
-      <div role="presentation" class="ellipsis"></div>
-      <div role="presentation" class="ellipsis ellipsis-purple"></div>
+        {/* Overlay */}
+        <div class="absolute inset-0 bg-black/50"></div>
 
-      <div class="container container-center container-spacing-xl">
-        <h3>
-          You can <span class="highlight">count</span>
-          <br /> on me
-        </h3>
-        <Counter />
-      </div>
-
-      <div class="container container-flex">
-        <Infobox>
-          <div q:slot="title" class="icon icon-cli">
-            CLI Commands
+        {/* Content */}
+        <div class="relative z-10 flex min-h-screen items-center justify-center text-center px-6">
+          <div>
+            <h1 class="text-5xl font-bold text-white mb-6">
+              The <span class="text-blue-500">Fastest</span>{" "}
+              <span class="text-green-500">Safest</span> Terminal <br /> for the
+              XRPL &amp; Xahau Network.
+            </h1>
+            <p class="text-xl text-gray-200 mb-8">
+              A sovereign interface for sovereign transactions.
+            </p>
           </div>
-          <>
-            <p>
-              <code>npm run dev</code>
-              <br />
-              Starts the development server and watches for changes
-            </p>
-            <p>
-              <code>npm run preview</code>
-              <br />
-              Creates production build and starts a server to preview it
-            </p>
-            <p>
-              <code>npm run build</code>
-              <br />
-              Creates production build
-            </p>
-            <p>
-              <code>npm run qwik add</code>
-              <br />
-              Runs the qwik CLI to add integrations
-            </p>
-          </>
-        </Infobox>
+        </div>
+      </section>
+
+      {/* What is XRPL OS */}
+      <section class="mb-20 text-center mt-6">
+        <div>
+          <h2 class="mb-4 text-2xl font-semibold">What is {`{XRPL}`}OS?</h2>
+          <p class="mx-auto max-w-3xl text-gray-600">
+            {`{XRPL}`}OS is not a wallet, exchange, or explorer. It is a
+            **transaction execution environment** — a terminal-like interface
+            where every XRPL and Xahau transaction type is categorized,
+            visualized, and executed intentionally.
+          </p>
+        </div>
+      </section>
+
+      {/* Philosophy */}
+      <section class="mb-20 text-center">
+        <h2 class="mb-4 text-2xl font-semibold">
+          Designed for Intentional Action
+        </h2>
+        <p class="mx-auto max-w-3xl text-gray-600">
+          Every action in {`{XRPL}`}OS is explicit. Transactions are grouped by
+          purpose — Create, Set, Claim, Deposit, Cancel — so users understand
+          exactly what they are signing before they sign it. No hidden state. No
+          dark UX.
+        </p>
+      </section>
+
+      {/* Supported Networks */}
+      <section class="mb-20 rounded-xl border bg-gray-50 p-10 text-center">
+        <h2 class="mb-4 text-2xl font-semibold">Ledger-Native by Design</h2>
+        <p class="mx-auto max-w-2xl text-gray-600">
+          {`{XRPL}`}OS is built specifically for the XRP Ledger ecosystem —
+          including Xahau hooks — and communicates directly with the network
+          over WebSockets for low-latency, real-time interaction.
+        </p>
+
+        <div class="mt-6 flex justify-center gap-6 text-sm font-medium">
+          <span>XRPL</span>
+          <span>Xahau</span>
+          <span>Hooks</span>
+          <span>AMMs</span>
+        </div>
+      </section>
+
+      {/* How it Works */}
+      <section class="mb-20 items-center p-4 grid gap-12 md:grid-cols-3">
+        <div>
+          <h3 class="mb-2 text-lg font-semibold">1. Select a Category</h3>
+          <p class="text-sm text-gray-600">
+            Choose a high-level action group from the sidebar to reveal relevant
+            on-ledger operations.
+          </p>
+        </div>
 
         <div>
-          <Infobox>
-            <div q:slot="title" class="icon icon-apps">
-              Example Apps
-            </div>
-            <p>
-              Have a look at the <a href="/demo/flower">Flower App</a> or the{" "}
-              <a href="/demo/todolist">Todo App</a>.
-            </p>
-          </Infobox>
-
-          <Infobox>
-            <div q:slot="title" class="icon icon-community">
-              Community
-            </div>
-            <ul>
-              <li>
-                <span>Questions or just want to say hi? </span>
-                <a href="https://qwik.dev/chat" target="_blank">
-                  Chat on discord!
-                </a>
-              </li>
-              <li>
-                <span>Follow </span>
-                <a href="https://twitter.com/QwikDev" target="_blank">
-                  @QwikDev
-                </a>
-                <span> on Twitter</span>
-              </li>
-              <li>
-                <span>Open issues and contribute on </span>
-                <a href="https://github.com/QwikDev/qwik" target="_blank">
-                  GitHub
-                </a>
-              </li>
-              <li>
-                <span>Watch </span>
-                <a href="https://qwik.dev/media/" target="_blank">
-                  Presentations, Podcasts, Videos, etc.
-                </a>
-              </li>
-            </ul>
-          </Infobox>
+          <h3 class="mb-2 text-lg font-semibold">
+            2. Configure the Transaction
+          </h3>
+          <p class="text-sm text-gray-600">
+            Parameters are visualized and validated before submission — no raw
+            JSON required.
+          </p>
         </div>
-      </div>
-    </>
+
+        <div>
+          <h3 class="mb-2 text-lg font-semibold">3. Sign via Xaman</h3>
+          <p class="text-sm text-gray-600">
+            All signing is handled externally through Xaman using OAuth2 for
+            maximum security and sovereignty.
+          </p>
+        </div>
+      </section>
+    </main>
   );
 });
 
 export const head: DocumentHead = {
-  title: "Welcome to Qwik",
+  title: "{XRPL}OS",
   meta: [
     {
-      name: "description",
-      content: "Qwik site description",
+      name: "The XRP Ledger Operating System",
+      content:
+        "Built by {NRDX}LABS | Secure web terminal to access the XRP Ledger",
     },
   ],
 };

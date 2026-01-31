@@ -20,7 +20,7 @@
 }
 
 .hero p {
-  color: white;
+  color: black;
   margin: 0;
   font-size: 1rem;
 }
@@ -40,4 +40,15 @@
   .hero p {
     font-size: 1.3rem;
   }
+}
+
+.hero {
+  position: relative; /* Important: contains the absolute video */
+  overflow: hidden;
+  min-height: 100vh; /* or whatever height you want */
+}
+
+.hero-video {
+  z-index: -1; /* Behind content */
+  object-fit: cover; /* Already in your class, but confirm */
 }

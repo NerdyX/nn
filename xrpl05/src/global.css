@@ -1,46 +1,105 @@
-/**
- * WHAT IS THIS FILE?
- *
- * Globally applied styles. No matter which components are in the page or matching route,
- * the styles in here will be applied to the Document, without any sort of CSS scoping.
- *
- */
-
-:root {
-  --qwik-dark-blue: #006ce9;
-  --qwik-light-blue: #18b6f6;
-  --qwik-light-purple: #ac7ff4;
-  --qwik-dark-purple: #713fc2;
-  --qwik-dirty-black: #1d2033;
-  --qwik-dark-background: #151934;
-  --qwik-dark-text: #ffffff;
-}
-
+@import "tailwindcss";
 html {
-  line-height: 1;
-  -webkit-text-size-adjust: 100%;
-  -moz-tab-size: 4;
-  -o-tab-size: 4;
-  tab-size: 4;
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    "Noto Sans",
-    sans-serif,
-    "Apple Color Emoji",
-    "Segoe UI Emoji",
-    "Segoe UI Symbol",
-    "Noto Color Emoji";
+  scroll-behavior: smooth;
+}
+body {
+  font-family: "Poppins", sans-serif;
+}
+@media (max-width: 768px) {
+  video {
+    display: none;
+  }
 }
 
-body {
-  padding: 0;
-  margin: 0;
-  line-height: inherit;
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 80px;
+  height: 40px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-switch input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-switch-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #ddd;
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 2px #ccc;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.toggle-switch-handle {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 30px;
+  height: 30px;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition:
+    transform 0.3s ease-in-out,
+    background-image 0.4s ease-in-out,
+    box-shadow 0.3s ease-in-out;
+}
+
+/* XRPL active (unchecked) */
+.toggle-switch
+  input:not(:checked)
+  ~ .toggle-switch-background
+  .toggle-switch-handle {
+  background-image: url("https://xrpl.org/assets/logo.png"); /* or your local asset */
+  background-color: royalblue; /* fallback if image fails */
+}
+
+/* Xahau active (checked) */
+.toggle-switch input:checked ~ .toggle-switch-background .toggle-switch-handle {
+  transform: translateX(40px);
+  background-image: url("https://xahau.network/assets/xahau-logo.png"); /* replace with real Xahau logo */
+  background-color: yellow;
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.2),
+    0 0 0 3px #05c46b;
+}
+
+/* Checked state */
+.toggle-switch input:checked ~ .toggle-switch-background {
+  background-color: #05c46b;
+  box-shadow: inset 0 0 0 2px #04b360;
+}
+
+.toggle-switch input:checked ~ .toggle-switch-background .toggle-switch-handle {
+  transform: translateX(40px);
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, 0.2),
+    0 0 0 3px #05c46b;
+}
+
+/* Optional: before/after text (On/Off) */
+.toggle-switch::before {
+  content: "XRPL";
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  font-size: 12px;
+  color: #fff;
+  font-weight: bold;
+  opacity: 0.9;
+  transition: opacity 0.3s;
+}
+
+.toggle-switch input:checked::before {
+  content: "Xahau";
+  left: auto;
+  right: 8px;
 }

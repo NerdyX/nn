@@ -34,6 +34,35 @@ export default component$(() => {
   const ledgers = useSignal<any[]>([]);
   const txs = useSignal<TxEvent[]>([]);
 
+  const quorum = useSignal<number | null>(null);
+  const loadFee = useSignal<number | null>(null);
+
+  const ledgerIntervals = useSignal<number[]>([]);
+  const txnCounts = useSignal<number[]>([]);
+  const feeSamples = useSignal<number[]>([]);
+
+  const lastLedgerClose = useSignal<number | null>(null);
+
+  // -- Colour Legend --
+  const txColor = (type?: string) => {
+    switch (type) {
+      case "Payment":
+        return "bg-green-400";
+      case "OfferCreate":
+      case "OfferCancel":
+        return "bg-blue-400";
+      case "TrustSet":
+        return "bg-cyan-400";
+      case "NFTokenMint":
+      case "NFTokenBurn":
+        return "bg-purple-400";
+      case "AccountSet":
+        return "bg-yellow-400";
+      default:
+        return "bg-white/20";
+    }
+  };
+
   // --- Resource for account info + txs ---
   const resource = useResource$<{
     account?: AccountInfo;
@@ -57,6 +86,18 @@ export default component$(() => {
     }
   });
 
+  const avg = (arr: number[]) =>
+    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+  const avgLedgerInterval = () => avg(ledgerIntervals.value);
+  const avgTxnPerLedger = () => avg(txnCounts.value);
+  const avgTxnFee = () => avg(feeSamples.value);
+
+  const txnPerSec = () => {
+    const interval = avgLedgerInterval();
+    return interval > 0 ? avgTxnPerLedger() / interval : 0;
+  };
+
   // --- WebSocket for live ledger & tx events ---
   useTask$(({ cleanup }) => {
     let ws: WebSocket | null = null;
@@ -78,23 +119,63 @@ export default component$(() => {
             streams: ["ledger", "transactions"],
           }),
         );
+
+        ws?.send(
+          JSON.stringify({
+            command: "server_info",
+          }),
+        );
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
 
+          // ---- SERVER INFO ----
+          if (msg.result?.info) {
+            quorum.value = msg.result.info.quorum ?? null;
+            loadFee.value = msg.result.info.load_factor ?? null;
+          }
+
+          // ---- LEDGER CLOSED ----
           if (msg.type === "ledgerClosed") {
+            const now = Date.now();
+
+            if (lastLedgerClose.value) {
+              const interval = (now - lastLedgerClose.value) / 1000;
+
+              ledgerIntervals.value = [
+                interval,
+                ...ledgerIntervals.value.slice(0, 19),
+              ];
+            }
+
+            lastLedgerClose.value = now;
+
+            if (msg.txn_count != null) {
+              txnCounts.value = [
+                msg.txn_count,
+                ...txnCounts.value.slice(0, 19),
+              ];
+            }
+
             ledgers.value = [
               {
                 ledger_index: msg.ledger_index,
                 ledger_hash: msg.ledger_hash,
                 close_time_human: msg.ledger_time || msg.ledger_close_time,
+                txn_count: msg.txn_count ?? 0,
               },
-              ...ledgers.value.slice(0, 9),
+              ...ledgers.value.slice(0, 11),
             ];
           }
 
+          // ---- TRANSACTIONS (fees) ----
+          if (msg.transaction?.Fee) {
+            const feeXrp = Number(msg.transaction.Fee) / 1_000_000;
+
+            feeSamples.value = [feeXrp, ...feeSamples.value.slice(0, 49)];
+          }
           if (msg.transaction) {
             txs.value = [
               {
@@ -159,6 +240,82 @@ export default component$(() => {
           Search
         </button>
       </div>
+
+      <section class="sticky top-0 z-40 bg-white backdrop-blur border-b border-white/10 mt-6">
+        <div class="grid grid-cols-6 divide-x divide-white/10 text-black">
+          <div class="px-4 py-3 text-center">
+            <div class="text-xs text-black">QUORUM</div>
+            <div class="text-lg font-mono">{quorum.value ?? "--"}</div>
+          </div>
+
+          <div class="px-4 py-3 text-center">
+            <div class="text-xs text-black">AVG. TXN FEE</div>
+            <div class="text-lg font-mono">{avgTxnFee().toFixed(6)} XRP</div>
+          </div>
+
+          <div class="px-4 py-3 text-center">
+            <div class="text-xs text-black">AVG. LEDGER INTERVAL</div>
+            <div class="text-lg font-mono">
+              {avgLedgerInterval().toFixed(2)} sec
+            </div>
+          </div>
+
+          <div class="px-4 py-3 text-center">
+            <div class="text-xs text-black">AVG. TXN / LEDGER</div>
+            <div class="text-lg font-mono">{avgTxnPerLedger().toFixed(2)}</div>
+          </div>
+
+          <div class="px-4 py-3 text-center">
+            <div class="text-xs text-black">TXN / SEC</div>
+            <div class="text-lg font-mono">{txnPerSec().toFixed(2)}</div>
+          </div>
+
+          <div class="px-4 py-3 text-center">
+            <div class="text-xs text-black">LOAD FEE</div>
+            <div class="text-lg font-mono">{loadFee.value ?? "--"}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-8">
+        <div class="relative w-full overflow-hidden">
+          <div class="flex gap-6">
+            {ledgers.value.map((ledger) => (
+              <div
+                key={ledger.ledger_hash}
+                class="border border-white/10 bg-black/5 rounded-lg p-4 min-w-55 shrink-0
+                       transition-transform duration-10 ease-out"
+              >
+                {/* Header */}
+                <div class="mb-3">
+                  <div class="text-black font-mono text-sm">
+                    {ledger.ledger_index}
+                  </div>
+                  <div class="text-xs text-black">
+                    {ledger.close_time_human}
+                  </div>
+                </div>
+
+                {/* Meta */}
+                <div class="text-xs text-black">
+                  TXN COUNT: <span class="text-black">{ledger.txn_count}</span>
+                </div>
+
+                {/* Matrix */}
+                <div class="grid grid-cols-5 gap-1">
+                  {txs.value.slice(0, 36).map((tx) => (
+                    <span
+                      key={tx.hash}
+                      title={tx.TransactionType}
+                      class={`w-3 h-3 rounded-full ${txColor(tx.TransactionType)}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Account Info + Transactions */}
       <div>

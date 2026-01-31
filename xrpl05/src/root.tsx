@@ -17,3 +17,19 @@ export default component$(() => {
     </QwikCityProvider>
   );
 });
+
+export const BackgroundVideo = component$(() => {
+  return (
+    <video
+      id="bg-video"
+      class="absolute inset-0 w-full h-full mx-auto object-cover"
+      autoplay
+      muted
+      loop
+      playsInline
+      preload="metadata"
+    >
+      <source src="/media/bg_vid.mp4" type="video/mp4" />
+    </video>
+  );
+});

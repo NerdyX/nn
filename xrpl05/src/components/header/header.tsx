@@ -118,17 +118,17 @@ export const Header = component$(() => {
 
   return (
     <>
-      <header class="w-full bg-white border-b shadow-sm">
-        <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
+      <header class="min-w-screen bg-transparent">
+        <div class="mx-auto flex h-16 max-w-screen items-center justify-between ">
           {/* Logo */}
-          <Link class="flex items-center gap-2" href="/">
+          <Link class="flex items-center gap-2 ml-5" href="/">
             <span class="text-lg font-semibold tracking-tight">
               {"{XRPL}"}OS
             </span>
           </Link>
 
           {/* Desktop Nav */}
-          <nav class="hidden items-center gap-6 md:flex">
+          <nav class="items-center gap-6 md:flex">
             <Link
               href="/explorer"
               class="text-sm font-medium text-gray-700 hover:text-black"
@@ -141,13 +141,37 @@ export const Header = component$(() => {
             >
               Marketplace
             </Link>
+            <Link
+              href="/about"
+              class="text-sm font-medium text-gray-700 hover:text-black"
+            >
+              About
+            </Link>
+            <Link
+              href="/about"
+              class="text-sm font-medium text-gray-700 hover:text-black"
+            >
+              Features
+            </Link>
+            <Link
+              href="/about"
+              class="text-sm font-medium text-gray-700 hover:text-black"
+            >
+              Docs
+            </Link>
+            <Link
+              href="/docs"
+              class="text-sm font-medium text-gray-700 hover:text-black"
+            >
+              FAQs
+            </Link>
           </nav>
 
           {/* Desktop Actions */}
           <div class="hidden md:flex items-center gap-6">
             {/* Network Toggle */}
-            <div class="flex items-center gap-3">
-              <span class="text-sm font-medium text-gray-700 min-w-12.5 text-right">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-gray-700 min-w-12.5 text-center">
                 {isXahau.value ? "Xahau" : "XRPL"}
               </span>
 
@@ -183,7 +207,7 @@ export const Header = component$(() => {
             ) : (
               <button
                 disabled={connecting.value}
-                class="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-green-300 flex items-center gap-2 disabled:opacity-50"
+                class="rounded-md bg-black mr-5 px-8 py-1.5 text-sm text-white hover:bg-green-300 flex items-center gap-2 disabled:opacity-50"
               >
                 {buttonContent()}
               </button>

@@ -34,6 +34,9 @@ export default component$(() => {
             <p class="text-xl text-gray-200 mb-8">
               A sovereign interface for sovereign transactions.
             </p>
+            <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+              Get Started
+            </button>
           </div>
         </div>
       </section>

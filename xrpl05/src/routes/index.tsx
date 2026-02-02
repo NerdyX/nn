@@ -21,7 +21,7 @@ const data = [
 
 export default component$(() => {
   return (
-    <main>
+    <div>
       {/* Hero */}
       <section class="relative w-screen min-h-screen overflow-hidden">
         {/* Video */}
@@ -141,7 +141,7 @@ export default component$(() => {
         </p>
       </section>
 
-      <div class="sm:pt-10 pl-9 font-spartan grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 border-t gap-12 lg:gap-8 pt-10 lg:pt-12 mb-16">
+      <div class="sm:pt-10 pl-6 font-spartan grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 border-t gap-12 lg:gap-8 pt-10 lg:pt-12 mb-16">
         <div class="col-span-full lg:col-span-2">
           <div class="lg:-mt-2 mb-4">
             <a
@@ -381,7 +381,7 @@ export default component$(() => {
           </nav>
         </div>
       </div>
-    </main>
+    </div>
   );
 });
 

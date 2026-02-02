@@ -1,4 +1,4 @@
-// src/routes/502.tsx (similar pattern for 503)
+// src/routes/502.tsx
 import { component$ } from "@builder.io/qwik";
 import { Link } from "@builder.io/qwik-city";
 

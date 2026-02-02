@@ -58,15 +58,17 @@ export default component$(() => {
   });
 
   return (
-    <>
-      <main class="flex flex-col min-h-screen">
-        <Header />
+    <div class="flex flex-col min-h-screen">
+      <Header />
+
+      <main class="flex-1">
         <Slot />
       </main>
-      <footer class="text-center font-extralight mb-1.5 mt-auto">
-        © 2025 - Product of <a href="https://nrdxlab.com">{"{NRDX}"}Labs.</a>{" "}
+
+      <footer class="text-center font-extralight mb-1.5">
+        © 2025 – Product of <a href="https://nrdxlab.com">{"{NRDX}"}Labs</a>.
         All rights reserved.
       </footer>
-    </>
+    </div>
   );
 });

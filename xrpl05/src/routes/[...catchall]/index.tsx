@@ -1,28 +1,11 @@
-// src/routes/error.tsx
-import { component$, useSignal, useErrorBoundary } from "@builder.io/qwik";
+// src/routes/[...catchall]/index.tsx
+import { component$ } from "@builder.io/qwik";
 import { Link } from "@builder.io/qwik-city";
 
 export default component$(() => {
-  const errorStore = useErrorBoundary();
-  const retryCount = useSignal(0);
-
-  const status =
-    (errorStore.error &&
-      ((errorStore.error as any).status ||
-        (errorStore.error as any).statusCode)) ||
-    500;
-
-  const statusText =
-    (errorStore.error && (errorStore.error as any).statusText) ||
-    (status === 404 ? "Not Found" : "Error");
-
-  const message =
-    (errorStore.error && (errorStore.error as any).message) ||
-    (status === 404
-      ? "The page you are looking for could not be found."
-      : "Something unexpected happened.");
-
-  const is404 = status === 404;
+  const status = 404;
+  const statusText = "Not Found";
+  const message = "The page you are looking for could not be found.";
 
   return (
     <div class="min-h-screen bg-gradient-to-br from-slate-50 to-rose-50 flex items-center justify-center p-4">
@@ -52,20 +35,6 @@ export default component$(() => {
         </p>
 
         <div class="flex flex-wrap gap-4 justify-center max-w-md mx-auto">
-          {!is404 && (
-            <button
-              class="bg-gradient-to-r from-rose-500 to-rose-600 text-white font-semibold py-4 px-8 rounded-2xl shadow-xl hover:shadow-2xl hover:from-rose-600 hover:to-rose-700 transition-all text-lg flex-1 min-w-[140px]"
-              onClick$={() => {
-                retryCount.value++;
-                if (retryCount.value <= 3) {
-                  window.location.reload();
-                }
-              }}
-            >
-              Retry ({retryCount.value}/3)
-            </button>
-          )}
-
           <Link
             href="/"
             class="bg-white/80 backdrop-blur-xl border border-slate-200 text-slate-900 font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl hover:bg-white transition-all text-lg flex-1 min-w-[140px]"

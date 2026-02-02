@@ -8,11 +8,11 @@ export default component$(() => {
   const message = "The page you are looking for could not be found.";
 
   return (
-    <div class="min-h-screen bg-gradient-to-br from-slate-50 to-rose-50 flex items-center justify-center p-4">
+    <div class="min-h-screen bg-linear-to-br from-slate-50 to-rose-50 flex items-center justify-center p-4">
       <div class="max-w-2xl mx-auto text-center">
-        <div class="inline-flex items-center justify-center w-24 h-24 bg-white rounded-3xl shadow-xl mb-8 border-4 border-rose-100">
+        <div class="inline-flex items-center justify-center w-24 h-24 bg-white rounded-3xl shadow-xl mb-8 border-4 border-blue-100">
           <svg
-            class="w-12 h-12 text-rose-500"
+            class="w-12 h-12 text-blue-600"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -26,7 +26,7 @@ export default component$(() => {
           </svg>
         </div>
 
-        <h1 class="text-6xl font-black bg-gradient-to-r from-rose-600 via-rose-700 to-slate-900 bg-clip-text text-transparent mb-4 tracking-tight">
+        <h1 class="text-6xl font-black bg-linear-to-r from-blue-600 via-indigo-700 to-slate-900 bg-clip-text text-transparent mb-4 tracking-tight">
           {status}
         </h1>
         <h2 class="text-3xl font-bold text-slate-900 mb-2">{statusText}</h2>
@@ -37,7 +37,7 @@ export default component$(() => {
         <div class="flex flex-wrap gap-4 justify-center max-w-md mx-auto">
           <Link
             href="/"
-            class="bg-white/80 backdrop-blur-xl border border-slate-200 text-slate-900 font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl hover:bg-white transition-all text-lg flex-1 min-w-[140px]"
+            class="bg-white/80 backdrop-blur-xl border border-slate-200 text-slate-900 font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl hover:bg-white transition-all text-lg flex-1 min-w-35"
           >
             Go Home
           </Link>

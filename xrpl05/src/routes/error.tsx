@@ -25,7 +25,7 @@ export default component$(() => {
   const is404 = status === 404;
 
   return (
-    <div class="min-h-screen bg-gradient-to-br from-slate-50 to-rose-50 flex items-center justify-center p-4">
+    <div class="min-h-screen bg-linear-to-br from-slate-50 to-rose-50 flex items-center justify-center p-4">
       <div class="max-w-2xl mx-auto text-center">
         <div class="inline-flex items-center justify-center w-24 h-24 bg-white rounded-3xl shadow-xl mb-8 border-4 border-rose-100">
           <svg
@@ -43,7 +43,7 @@ export default component$(() => {
           </svg>
         </div>
 
-        <h1 class="text-6xl font-black bg-gradient-to-r from-rose-600 via-rose-700 to-slate-900 bg-clip-text text-transparent mb-4 tracking-tight">
+        <h1 class="text-6xl font-black bg-linear-to-r from-rose-600 via-rose-700 to-slate-900 bg-clip-text text-transparent mb-4 tracking-tight">
           {status}
         </h1>
         <h2 class="text-3xl font-bold text-slate-900 mb-2">{statusText}</h2>
@@ -54,7 +54,7 @@ export default component$(() => {
         <div class="flex flex-wrap gap-4 justify-center max-w-md mx-auto">
           {!is404 && (
             <button
-              class="bg-gradient-to-r from-rose-500 to-rose-600 text-white font-semibold py-4 px-8 rounded-2xl shadow-xl hover:shadow-2xl hover:from-rose-600 hover:to-rose-700 transition-all text-lg flex-1 min-w-[140px]"
+              class="bg-linear-to-r from-rose-500 to-rose-600 text-white font-semibold py-4 px-8 rounded-2xl shadow-xl hover:shadow-2xl hover:from-rose-600 hover:to-rose-700 transition-all text-lg flex-1 min-w-35"
               onClick$={() => {
                 retryCount.value++;
                 if (retryCount.value <= 3) {
@@ -68,7 +68,7 @@ export default component$(() => {
 
           <Link
             href="/"
-            class="bg-white/80 backdrop-blur-xl border border-slate-200 text-slate-900 font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl hover:bg-white transition-all text-lg flex-1 min-w-[140px]"
+            class="bg-white/80 backdrop-blur-xl border border-slate-200 text-slate-900 font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl hover:bg-white transition-all text-lg flex-1 min-w-35"
           >
             Go Home
           </Link>

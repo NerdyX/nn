@@ -26,17 +26,47 @@ export default component$(() => {
       <section class="relative w-screen min-h-screen overflow-hidden">
         {/* Video */}
 
-        <video
-          id="bg-video"
-          class="absolute inset-0 w-full h-full mx-auto object-cover"
-          autoplay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-        >
-          <source src="/media/bg_vid.mp4" type="video/mp4" />
-        </video>
+        <div class="fixed inset-0 -z-10 w-full h-full overflow-hidden">
+          {/* Static poster from public/ */}
+          <img
+            src="/media/bg-poster.jpg"
+            class="absolute inset-0 w-full h-full object-cover opacity-100 transition-opacity duration-500"
+            data-poster
+            alt=""
+            loading="eager"
+          />
+
+          {/* Video */}
+          <video
+            id="bg-video"
+            class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
+            autoplay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            fetchPriority="high"
+            onLoadedData$={() => {
+              const video = document.getElementById(
+                "bg-video",
+              ) as HTMLVideoElement;
+              const poster = document.querySelector(
+                "[data-poster]",
+              ) as HTMLElement;
+              video
+                ?.play()
+                .then(() => {
+                  video.style.opacity = "1";
+                  poster.style.opacity = "0";
+                })
+                .catch(() => {
+                  // Video failed - keep Qwik poster visible
+                });
+            }}
+          >
+            <source src="/media/bg_vid.mp4" type="video/mp4" />
+          </video>
+        </div>
 
         {/* Overlay */}
         <div class="absolute inset-0 bg-black/50"></div>

@@ -64,7 +64,8 @@ export default component$(() => {
         <Slot />
       </main>
       <footer class="text-center font-extralight mb-1.5 mt-auto">
-        <a href="https://nrdxlab.com">Created by {"{NRDX}"}Labs</a>
+        © 2025 - Product of <a href="https://nrdxlab.com">{"{NRDX}"}Labs.</a>{" "}
+        All rights reserved.
       </footer>
     </>
   );

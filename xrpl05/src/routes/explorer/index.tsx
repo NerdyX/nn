@@ -6,7 +6,19 @@ import {
   Resource,
 } from "@builder.io/qwik";
 
+// -- Network selection --
 type Network = "xrpl" | "xahau";
+type XRPLResponse = any;
+
+let ws: WebSocket | null = null;
+let nextId = 1;
+
+// -- Network Search --
+const NETWORKS = [
+  { label: "Mainnet", url: "wss://s1.ripple.com" },
+  { label: "Testnet", url: "wss://s.altnet.rippletest.net:51233" },
+  { label: "Devnet", url: "wss://s.devnet.rippletest.net:51233" },
+];
 
 interface TxEvent {
   hash: string;
@@ -22,6 +34,42 @@ interface AccountInfo {
   balance: string;
   sequence: number;
   owner_count: number;
+}
+
+function connectAndQuery(
+  wsUrl: string,
+  queryType: string,
+  accountOrParam: string,
+  onResult: (res: XRPLResponse) => void,
+  onError: (err: string) => void,
+) {
+  try {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      const req: any = {
+        id: nextId++,
+        command: queryType as string,
+        account: accountOrParam,
+        strict: true,
+        ledger_index: "validated",
+      };
+
+      // Special params for specific queries
+      if (queryType === "ledger")
+        req.ledger_index = accountOrParam || "validated";
+      if (queryType === "tx_history") req.limit = 20;
+      if (queryType === "account_nft") req.limit = 100;
+
+      ws!.send(JSON.stringify(req));
+    };
+
+    ws.onerror = () => onError("WebSocket connection failed");
+  } catch (e: any) {
+    onError(e?.message || "Connection failed");
+  }
 }
 
 export default component$(() => {
@@ -42,6 +90,13 @@ export default component$(() => {
   const feeSamples = useSignal<number[]>([]);
 
   const lastLedgerClose = useSignal<number | null>(null);
+  //const lastLedgerIndex = useSignal<number | null>(null);
+  //const lastLedgerHash = useSignal<string | null>(null);
+  //const lastLedgerTime = useSignal<Date | null>(null);
+
+  const queryType = useSignal("account_info");
+  const result = useSignal<XRPLResponse | null>(null);
+  const detailedResult = useSignal<XRPLResponse | null>(null);
 
   // -- Colour Legend --
   const txColor = (type?: string) => {
@@ -210,34 +265,78 @@ export default component$(() => {
     <main class="mx-auto max-w-5xl px-6 py-10">
       <h1 class="text-2xl font-semibold mb-4">Account Explorer</h1>
 
-      {/* Search bar */}
-      <div class="flex gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="Enter XRPL or Xahau address"
-          class="flex-1 rounded border px-3 py-2"
-          value={address.value}
-          onInput$={(e) =>
-            (address.value = (e.target as HTMLInputElement).value)
-          }
-        />
+      {/* Bloomberg-style Search Bar */}
+      <div class="flex gap-3 mb-8 max-w-4xl mx-auto">
+        {/* Main Search */}
+        <div class="relative flex-1">
+          <input
+            type="text"
+            placeholder={
+              queryType.value === "ledger"
+                ? "Ledger index or hash..."
+                : "Account address (r...), tx hash, etc."
+            }
+            class="w-full rounded-xl border-2 border-slate-200 bg-white/90 backdrop-blur-sm px-5 py-4 pr-14 text-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-3 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm hover:shadow-md transition-all duration-200"
+            value={address.value}
+            onInput$={(e) =>
+              (address.value = (e.target as HTMLInputElement).value)
+            }
+          />
+          <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+            <svg
+              class="w-6 h-6 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+        </div>
 
-        <select
-          class="rounded border px-3 py-2"
-          value={network.value}
-          onChange$={(e) =>
-            (network.value = (e.target as HTMLSelectElement).value as Network)
-          }
-        >
-          <option value="xrpl">XRPL</option>
-          <option value="xahau">Xahau</option>
-        </select>
-
+        {/* Search Button */}
         <button
-          class="rounded bg-black px-4 py-2 text-white"
-          onClick$={() => (searchQuery.value = address.value)}
+          class="group relative rounded-xl bg-liear-to-r from-slate-900 to-slate-800 px-8 py-4 text-black font-bold text-lg shadow-xl hover:shadow-2xl hover:from-slate-800 hover:to-slate-700 active:scale-[0.98] transition-all duration-200 flex items-center gap-2 hover:gap-3 disabled:opacity-50"
+          onClick$={() => {
+            searchQuery.value = address.value; // YOUR EXISTING LOGIC
+            // NEW: Run detailed query
+            const url =
+              network.value === "xrpl"
+                ? NETWORKS[0].url
+                : "wss://xahau.network:51234";
+            connectAndQuery(
+              url,
+              queryType.value,
+              address.value,
+              (res) => {
+                detailedResult.value = res;
+              },
+              (err) => {
+                console.error(err);
+              },
+            );
+          }}
+          disabled={!address.value.trim()}
         >
-          Search
+          <svg
+            class="w-5 h-5 group-hover:scale-110 transition-transform"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <span>Search</span>
         </button>
       </div>
 
@@ -279,6 +378,9 @@ export default component$(() => {
 
       <section class="mt-8">
         <div class="relative w-full overflow-hidden">
+          <h2 class="text-lg font-semibold mb-2">
+            Live Ledgers: {status.value}
+          </h2>
           <div class="flex gap-6">
             {ledgers.value.map((ledger) => (
               <div
@@ -375,25 +477,39 @@ export default component$(() => {
           )}
         />
       </div>
+      {result.value && (
+        <div class="mt-8 p-6 bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200/50">
+          <h3 class="text-xl font-bold text-slate-900 mb-4">
+            Query Results ({queryType.value})
+          </h3>
+          {detailedResult.value?.status === "success" ? (
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 p-6 bg-linear-to-r from-blue-50 to-indigo-50 rounded-2xl">
+              <div>
+                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Status
+                </div>
+                <div class="text-2xl font-bold text-emerald-600">Success</div>
+              </div>
+              {detailedResult.value.result?.account && (
+                <div>
+                  <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Account
+                  </div>
+                  <div class="text-lg font-mono font-semibold">
+                    {detailedResult.value.result.account.slice(0, 8)}...
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <pre class="max-h-96 overflow-auto rounded-2xl bg-slate-900/95 p-6 text-xs text-slate-100 font-mono border backdrop-blur-sm">
+            {JSON.stringify(detailedResult.value, null, 2)}
+          </pre>
+        </div>
+      )}
 
       {/* Live Ledger Feed */}
-      <section class="mt-8 rounded border bg-white p-6">
-        <h2 class="text-lg font-semibold mb-2">Live Ledgers</h2>
-        <p>Status: {status.value}</p>
-        <ul class="space-y-1 text-sm">
-          {ledgers.value.map((l) => (
-            <li
-              key={l.ledger_hash}
-              class="flex justify-between bg-gray-50 px-3 py-1 rounded"
-            >
-              <span>#{l.ledger_index}</span>
-              <span class="truncate text-gray-500">
-                {l.ledger_hash.slice(0, 12)}…
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
     </main>
   );
 });

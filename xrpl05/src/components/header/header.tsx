@@ -240,12 +240,6 @@ export const Header = component$(() => {
         {mobileOpen.value && (
           <div class="border-t border-gray-200 md:hidden">
             <nav class="flex flex-col gap-4 px-4 py-4">
-              <Link href="/" class="text-base text-gray-700">
-                Home
-              </Link>
-              <Link href="/dashboard" class="text-base text-gray-700">
-                Dashboard
-              </Link>
               <Link href="/explorer" class="text-base text-gray-700">
                 Explorer
               </Link>

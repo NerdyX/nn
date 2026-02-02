@@ -32,6 +32,7 @@
 		"@eslint/js": "latest",
 		"@tailwindcss/postcss": "^4.1.18",
 		"@types/node": "^25.1.0",
+		"@types/three": "^0.182.0",
 		"autoprefixer": "^10.4.24",
 		"eslint": "9.32.0",
 		"eslint-plugin-qwik": "^1.18.0",
@@ -49,6 +50,7 @@
 	},
 	"dependencies": {
 		"@tailwindcss/vite": "^4.1.18",
+		"three": "^0.182.0",
 		"xaman": "^1.0.0",
 		"xrpl": "^4.5.0",
 		"xumm": "^1.8.0"

@@ -302,3 +302,36 @@
     opacity: 1;
   }
 }
+
+/* header.css */
+
+/* Glassmorphism pill header */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.08); /* light mode friendly */
+  /* For dark mode you can use: rgba(30, 30, 40, 0.4) or similar */
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-radius: 9999px; /* perfect pill shape */
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.15),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+/* Optional: subtle shrink / lift effect on scroll (needs intersection observer or tailwind) */
+@supports (backdrop-filter: blur(1px)) {
+  .glass-panel {
+    /* fallback for very old browsers */
+    background: rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* Mobile menu (if you implement it later) */
+@media (max-width: 767px) {
+  .glass-panel {
+    max-width: 95%;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}

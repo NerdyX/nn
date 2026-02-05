@@ -5,11 +5,12 @@ import {
   $,
   useContext,
   useVisibleTask$,
+  useStylesScoped$,
 } from "@builder.io/qwik";
 import { Link, useNavigate } from "@builder.io/qwik-city";
 import { useXamanSession } from "~/routes/layout";
 import { NetworkContext } from "~/routes/layout";
-//import headerStyles from "./header.css?inline";
+import headerStyles from "./header.css?inline";
 
 //const CONTEXT_ROUTES = ["/dashboard", "/marketplace", "/explorer"];
 
@@ -126,6 +127,7 @@ export const ScrollWheel = component$<ScrollWheelProps>(
 );
 
 export const Header = component$(() => {
+  useStylesScoped$(headerStyles);
   const mobileOpen = useSignal(false);
   const connecting = useSignal(false);
 
@@ -230,8 +232,13 @@ export const Header = component$(() => {
 
   return (
     <>
-      <header class="w-full bg-transparent">
-        <div class="mx-auto flex h-16 w-full items-center justify-between px-4 lg:px-6">
+      <header class="w-full bg-gray-400 top-0 left-0 right-0 z-50">
+        <div
+          class="glass-panel
+                  flex h-14 md:h-16 items-center justify-between
+                  px-5 md:px-8
+                  transition-all duration-300"
+        >
           {/* Logo */}
           <Link class="flex items-center gap-2 ml-5" href="/">
             <span class="text-lg font-semibold tracking-tight">

@@ -23,7 +23,7 @@ export default component$(() => {
   return (
     <div>
       {/* Hero */}
-      <section class="relative bg-violet-200 border border-b-gray-400 w-full min-h-screen overflow-hidden">
+      <section class="relative bg-black w-full min-h-screen overflow-hidden">
         {/* Video */}
 
         <div class="fixed  w-full h-full overflow-hidden">
@@ -87,7 +87,7 @@ export default component$(() => {
         >
           <h1
             style={{
-              color: "black",
+              color: "white",
               margin: 0,
               lineHeight: 1.1,
               fontSize: "10.0rem",
@@ -100,7 +100,7 @@ export default component$(() => {
           <h2
             class="text-3xl"
             style={{
-              color: "black",
+              color: "white",
               margin: 0,
               fontWeight: 500,
               lineHeight: 1.2,
@@ -109,12 +109,12 @@ export default component$(() => {
             The Multi Ledger Operating System
           </h2>
           <h3
-            class="text-center text-black container mx-auto px-6 pt-3 md:px-12 lg:px-20 leading-snug text-lg md:text-xl"
+            class="text-center container mx-auto px-6 pt-3 md:px-12 lg:px-20 leading-snug text-lg md:text-xl"
             style={{
               fontFamily: "'Deco', sans-serif",
               fontWeight: 100,
               fontSize: "1.0rem",
-              color: "black",
+              color: "white",
               margin: 0,
               maxWidth: "900px",
             }}

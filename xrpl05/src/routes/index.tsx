@@ -23,21 +23,21 @@ export default component$(() => {
   return (
     <div>
       {/* Hero */}
-      <section class="relative w-screen min-h-screen overflow-hidden">
+      <section class="relative bg-violet-200 border border-b-gray-400 w-full min-h-screen overflow-hidden">
         {/* Video */}
 
-        <div class="fixed inset-0 -z-10 w-full h-full overflow-hidden">
+        <div class="fixed  w-full h-full overflow-hidden">
           {/* Static poster from public/ */}
-          <img
+          {/*<img
             src="/media/bg-poster.jpg"
             class="absolute inset-0 w-full h-full object-cover opacity-100 transition-opacity duration-500"
             data-poster
             alt=""
             loading="eager"
-          />
+          />*/}
 
           {/* Video */}
-          <video
+          {/*<video
             id="bg-video"
             class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-700"
             autoplay
@@ -65,11 +65,11 @@ export default component$(() => {
             }}
           >
             <source src="/media/bg_vid.mp4" type="video/mp4" />
-          </video>
+          </video>}*/}
         </div>
 
         {/* Overlay */}
-        <div class="absolute inset-0 bg-black/50"></div>
+        {/*<div class="absolute inset-0 bg-black/50"></div>
 
         {/* Content */}
         <div
@@ -82,12 +82,12 @@ export default component$(() => {
             justifyContent: "center",
             textAlign: "center",
             gap: "0.5rem",
-            zIndex: 10,
+            zIndex: 0,
           }}
         >
           <h1
             style={{
-              color: "white",
+              color: "black",
               margin: 0,
               lineHeight: 1.1,
               fontSize: "10.0rem",
@@ -100,7 +100,7 @@ export default component$(() => {
           <h2
             class="text-3xl"
             style={{
-              color: "rgba(255,255,255,0.8)",
+              color: "black",
               margin: 0,
               fontWeight: 500,
               lineHeight: 1.2,
@@ -109,12 +109,12 @@ export default component$(() => {
             The Multi Ledger Operating System
           </h2>
           <h3
-            class="text-center text-amber-50 container mx-auto px-6 pt-3 md:px-12 lg:px-20 leading-snug text-lg md:text-xl"
+            class="text-center text-black container mx-auto px-6 pt-3 md:px-12 lg:px-20 leading-snug text-lg md:text-xl"
             style={{
               fontFamily: "'Deco', sans-serif",
               fontWeight: 100,
               fontSize: "1.0rem",
-              color: "rgba(255,255,255,0.9)",
+              color: "black",
               margin: 0,
               maxWidth: "900px",
             }}
@@ -159,7 +159,7 @@ export default component$(() => {
       </section>
 
       {/* Philosophy */}
-      <section class="mb-20 rounded-xl border bg-black p-10 text-center">
+      <section class="rounded-xl flex flex-col flex-3 border bg-black p-10 text-center">
         <h2 class="mb-4 text-white text-2xl font-semibold">
           Designed for Sovereignty
         </h2>
@@ -167,7 +167,43 @@ export default component$(() => {
           Every action in {`{XRPL}`}OS is explicit. Transactions are grouped by
           purpose — Create, Set, Claim, Deposit, Cancel — so users understand
           exactly what they are signing before they sign it. No hidden state. No
-          dark UX.
+          dark UX. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed
+          non risus. <br class="flex flex-row mb-2" />
+          Suspendisse lectus tortor, dignissim sit amet, adipiscing nec,
+          ultricies sed, dolor. <br class="flex items-wrap" />
+          Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper
+          congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie,
+          enim est eleifend mi, non fermentum diam nisl sit amet erat. Duis
+          semper. Duis arcu massa, scelerius et ultrices posuere cubilia Curae;
+          Aliquam nibh. Mauris ac mauris sed pede pellentesque fermentum.
+          Maecenas adipiscing ante non diam sodales hendrerit. Lorem ipsum dolor
+          sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse
+          lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed,
+          dolor. Cras elementum ultrices diam. Maecenas ligula massa, varius a,
+          semper congue, euismod non, mi. Proin porttitor, orci nec nonummy
+          molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat.
+          Duis semper. Duis arcu massa, scelerisque vitae, consequat in, pretium
+          a, enim. Pellentesque congue. Ut in risus volutpat libero pharetra
+          tempor. Cras vestibulum bibendum augue. Praesent egestas leo in pede.
+          Praesent blandit odio eu enim. Pellentesque sed dui ut augue blandit
+          sodales. Vestibulum ante ipsum primis in faucibus orci luctus et
+          ultrices posuere cubilia Curae; Aliquam nibh. Mauris ac mauris sed
+          pede pellentesque fermentum. Maecenas adipiscing ante non diam sodales
+          hendrerit.
+          <br class="mt-2" />
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non
+          risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec,
+          ultricies sed, dolor. Cras elementum ultrices diam. Maecenas ligula
+          massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci
+          nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl
+          sit amet erat. Duis semper. Duis arcu massa, scelerisque vitae,
+          consequat in, pretium a, enim. Pellentesque congue. Ut in risus
+          volutpat libero pharetra tempor. Cras vestibulum bibendum augue.
+          Praesent egestas leo in pede. Praesent blandit odio eu enim.
+          Pellentesque sed dui ut augue blandit sodales. Vestibulum ante ipsum
+          primis in faucibus orci luctus et ultrices posuere cubilia Curae;
+          Aliquam nibh. Mauris ac mauris sed pede pellentesque fermentum.
+          Maecenas adipiscing ante non diam sodales hendrerit.
         </p>
       </section>
 

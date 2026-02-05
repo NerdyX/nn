@@ -1,26 +1,170 @@
 // src/components/header/header.tsx
-import { component$, useSignal, $, useContext } from "@builder.io/qwik";
+import {
+  component$,
+  useSignal,
+  $,
+  useContext,
+  useVisibleTask$,
+} from "@builder.io/qwik";
 import { Link, useNavigate } from "@builder.io/qwik-city";
 import { useXamanSession } from "~/routes/layout";
 import { NetworkContext } from "~/routes/layout";
+//import headerStyles from "./header.css?inline";
+
+//const CONTEXT_ROUTES = ["/dashboard", "/marketplace", "/explorer"];
+
+type WalletType = "xaman" | "ledger" | "crossmark" | "walletconnect" | null;
+
+interface ScrollWheelProps {
+  items: string[];
+  value: string;
+  onChange$: (value: string) => void;
+}
+
+export type NavItem = {
+  id: string;
+  label: string;
+  href?: string;
+  icon?: string;
+  pages?: string[]; // routes where it appears
+  min?: "mobile" | "md" | "lg"; // breakpoint visibility
+};
+
+export const NAV_ITEMS: NavItem[] = [
+  {
+    id: "home",
+    label: "Home",
+    href: "/",
+    pages: ["*"],
+    min: "mobile",
+  },
+  {
+    id: "market",
+    label: "Marketplace",
+    href: "/marketplace",
+    pages: ["/marketplace"],
+    min: "mobile",
+  },
+  {
+    id: "featured",
+    label: "Featured",
+    pages: ["/marketplace"],
+    min: "lg",
+  },
+  {
+    id: "trending",
+    label: "Trending",
+    pages: ["/marketplace"],
+    min: "lg",
+  },
+  {
+    id: "stats",
+    label: "Stats",
+    pages: ["/marketplace"],
+    min: "lg",
+  },
+  {
+    id: "ledger",
+    label: "Ledger",
+    href: "/ledger",
+    pages: ["/ledger", "/dashboard"],
+    min: "md",
+  },
+];
+
+export const ScrollWheel = component$<ScrollWheelProps>(
+  ({ items, value, onChange$ }) => {
+    const containerRef = useSignal<HTMLElement>();
+    const activeIndex = useSignal(items.indexOf(value));
+
+    useVisibleTask$(() => {
+      const el = containerRef.value;
+      if (!el) return;
+
+      const itemHeight = 48;
+      el.scrollTop = activeIndex.value * itemHeight;
+    });
+
+    return (
+      <div class="wheel-wrapper">
+        <div
+          ref={containerRef}
+          class="wheel"
+          onScroll$={() => {
+            const el = containerRef.value!;
+            const index = Math.round(el.scrollTop / 48);
+
+            if (index !== activeIndex.value) {
+              activeIndex.value = index;
+              onChange$(items[index]);
+
+              // HAPTIC FEEDBACK
+              if ("vibrate" in navigator) {
+                navigator.vibrate(8);
+              }
+            }
+          }}
+        >
+          {items.map((item, i) => (
+            <div
+              key={item}
+              class={{
+                "wheel-item": true,
+                active: i === activeIndex.value,
+              }}
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+
+        {/* Center highlight */}
+        <div class="wheel-highlight" />
+      </div>
+    );
+  },
+);
 
 export const Header = component$(() => {
   const mobileOpen = useSignal(false);
   const connecting = useSignal(false);
+
   const session = useXamanSession();
   const nav = useNavigate();
   const { activeNetwork } = useContext(NetworkContext);
 
   const isConnected = session.value?.connected ?? false;
   const address = session.value?.address;
-  const shortAddress = address ? `$` : "";
+  const shortAddress = address
+    ? `${address.slice(0, 6)}…${address.slice(-4)}`
+    : "";
 
   const isXahau = useSignal(activeNetwork.value === "xahau");
 
-  // Modal + QR state
+  /* ---------------- MODAL STATE ---------------- */
   const modalOpen = useSignal(false);
+  const selectedWallet = useSignal<WalletType>(null);
+
+  // Xaman specific
   const qrCode = useSignal<string | null>(null);
   const pollError = useSignal<string | null>(null);
+
+  /* ---------------- HANDLERS ---------------- */
+
+  const openWalletModal = $(() => {
+    modalOpen.value = true;
+    selectedWallet.value = null;
+    qrCode.value = null;
+    pollError.value = null;
+  });
+
+  const closeModal = $(() => {
+    modalOpen.value = false;
+    connecting.value = false;
+    selectedWallet.value = null;
+    qrCode.value = null;
+    pollError.value = null;
+  });
 
   const handleToggleNetwork = $((event: InputEvent) => {
     const checked = (event.target as HTMLInputElement).checked;
@@ -33,46 +177,20 @@ export const Header = component$(() => {
     nav("/");
   });
 
-  // Icons
-  const PowerOnIcon = () => (
-    <svg
-      class="h-4 w-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      stroke-width={2}
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M13 10V3L4 14h7v7l9-11h-7z"
-      />
-    </svg>
-  );
+  const selectWallet = $((wallet: WalletType) => {
+    selectedWallet.value = wallet;
 
-  const PowerOffIcon = () => (
-    <svg
-      class="h-4 w-4"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      stroke-width={2}
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5.636 5.636L12 12"
-      />
-    </svg>
-  );
+    if (wallet === "xaman") {
+      connecting.value = true;
+      // 🔴 Hook your existing Xaman QR init logic here
+      // set qrCode.value = "...";
+    }
+  });
+
+  /* ---------------- UI HELPERS ---------------- */
 
   const Spinner = () => (
-    <svg
-      class="animate-spin h-4 w-4 text-white"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
+    <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
       <circle
         class="opacity-25"
         cx="12"
@@ -80,46 +198,40 @@ export const Header = component$(() => {
         r="10"
         stroke="currentColor"
         stroke-width="4"
+        fill="none"
       />
       <path
         class="opacity-75"
         fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
       />
     </svg>
   );
 
-  const buttonContent = () => {
-    if (connecting.value) {
-      return (
-        <div class="flex items-center justify-center gap-2">
-          <Spinner />
-          <span>Connecting...</span>
-        </div>
-      );
-    }
-    if (isConnected) {
-      return (
-        <div class="flex items-center gap-2">
-          <PowerOffIcon />
-          <span>Disconnect</span>
-        </div>
-      );
-    }
-    return (
-      <div class="flex items-center gap-2">
-        <PowerOnIcon />
-        <span>Connect Wallet</span>
-      </div>
-    );
-  };
+  const WalletButton = ({
+    id,
+    label,
+    description,
+  }: {
+    id: WalletType;
+    label: string;
+    description: string;
+  }) => (
+    <button
+      onClick$={() => selectWallet(id)}
+      class="w-full rounded-xl border border-gray-200 px-4 py-4 text-left hover:bg-gray-50 transition"
+    >
+      <div class="font-semibold">{label}</div>
+      <div class="text-sm text-gray-500">{description}</div>
+    </button>
+  );
 
-  // Polling logic
+  /* ---------------- RENDER ---------------- */
 
   return (
     <>
-      <header class="min-w-screen bg-transparent">
-        <div class="mx-auto flex h-16 max-w-screen items-center justify-between ">
+      <header class="w-full bg-transparent">
+        <div class="mx-auto flex h-16 w-full items-center justify-between px-4 lg:px-6">
           {/* Logo */}
           <Link class="flex items-center gap-2 ml-5" href="/">
             <span class="text-lg font-semibold tracking-tight">
@@ -128,257 +240,127 @@ export const Header = component$(() => {
           </Link>
 
           {/* Desktop Nav */}
-          <nav class="items-center gap-6 md:flex">
-            <Link
-              href="/explorer"
-              class="text-sm font-medium text-gray-700 hover:text-black"
-            >
-              Explorer
-            </Link>
-            <Link
-              href="/marketplace"
-              class="text-sm font-medium text-gray-700 hover:text-black"
-            >
-              Marketplace
-            </Link>
-            <Link
-              href="/about"
-              class="text-sm font-medium text-gray-700 hover:text-black"
-            >
-              About
-            </Link>
-            <Link
-              href="/about"
-              class="text-sm font-medium text-gray-700 hover:text-black"
-            >
-              Features
-            </Link>
-            <Link
-              href="/about"
-              class="text-sm font-medium text-gray-700 hover:text-black"
-            >
-              Docs
-            </Link>
-            <Link
-              href="/docs"
-              class="text-sm font-medium text-gray-700 hover:text-black"
-            >
-              FAQs
-            </Link>
+          <nav class="hidden md:flex items-center gap-6">
+            <Link href="/explorer">Explorer</Link>
+            <Link href="/marketplace">Marketplace</Link>
+            <Link href="/about">About</Link>
+            <Link href="/docs">Docs</Link>
           </nav>
 
           {/* Desktop Actions */}
           <div class="hidden md:flex items-center gap-6">
             {/* Network Toggle */}
             <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-gray-700 min-w-12.5 text-center">
-                {isXahau.value ? "Xahau" : "XRPL"}
-              </span>
-
+              <span class="text-sm">{isXahau.value ? "Xahau" : "XRPL"}</span>
               <label class="toggle-switch">
                 <input
                   type="checkbox"
                   checked={isXahau.value}
-                  onInput$={(event) => {
-                    const checked = (event.target as HTMLInputElement).checked;
-                    activeNetwork.value = checked ? "xahau" : "xrpl";
-                    isXahau.value = checked;
-                  }}
+                  onInput$={handleToggleNetwork}
                 />
                 <div class="toggle-switch-background">
-                  <div class="toggle-switch-handle"></div>
+                  <div class="toggle-switch-handle" />
                 </div>
               </label>
             </div>
 
-            {/* Wallet Button */}
+            {/* Wallet */}
             {isConnected ? (
-              <div class="flex items-center gap-4">
-                <span class="text-sm font-medium text-green-700 bg-green-50 px-3 py-1 rounded-full">
+              <div class="flex items-center gap-3">
+                <span class="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full">
                   {shortAddress}
                 </span>
                 <button
                   onClick$={handleDisconnect}
-                  class="rounded-md bg-red-600 px-4 py-1.5 text-sm text-white hover:bg-red-700 flex items-center gap-2"
+                  class="bg-red-600 text-white px-4 py-1.5 rounded-md"
                 >
-                  {buttonContent()}
+                  Disconnect
                 </button>
               </div>
             ) : (
               <button
-                disabled={connecting.value}
-                class="rounded-md bg-black mr-5 px-8 py-1.5 text-sm text-white hover:bg-green-300 flex items-center gap-2 disabled:opacity-50"
+                onClick$={openWalletModal}
+                class="bg-black text-white px-6 py-1.5 rounded-md"
               >
-                {buttonContent()}
+                Connect Wallet
               </button>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Toggle */}
           <button
             class="md:hidden"
             onClick$={() => (mobileOpen.value = !mobileOpen.value)}
-            aria-label="Toggle menu"
           >
-            <svg
-              class="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
+            ☰
           </button>
         </div>
-
-        {/* Mobile Menu */}
-        {mobileOpen.value && (
-          <div class="border-t border-gray-200 md:hidden">
-            <nav class="flex flex-col gap-4 px-4 py-4">
-              <Link href="/explorer" class="text-base text-gray-700">
-                Explorer
-              </Link>
-              <Link href="/marketplace" class="text-base text-gray-700">
-                Marketplace
-              </Link>
-
-              {/* Mobile Network Toggle */}
-              <div class="flex items-center justify-between mt-2">
-                <span class="text-base font-medium text-gray-700">Network</span>
-                <div class="flex items-center gap-3">
-                  <span class="text-sm">
-                    {isXahau.value ? "Xahau" : "XRPL"}
-                  </span>
-                  <label class="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={isXahau.value}
-                      onInput$={handleToggleNetwork}
-                    />
-                    <div class="toggle-switch-background">
-                      <div class="toggle-switch-handle"></div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Mobile Wallet */}
-              <div class="mt-2">
-                {isConnected ? (
-                  <div class="flex flex-col gap-3">
-                    <div class="text-base font-medium text-green-700">
-                      Connected: {shortAddress}
-                    </div>
-                    <button
-                      onClick$={handleDisconnect}
-                      class="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 flex items-center justify-center gap-2"
-                    >
-                      {buttonContent()}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    disabled={connecting.value}
-                    class=" w-full rounded-md bg-black px-4 py-2 text-center text-white hover:bg-gray-800 flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {buttonContent()}
-                  </button>
-                )}
-              </div>
-            </nav>
-          </div>
-        )}
       </header>
 
-      {/* QR Modal */}
+      {/* ---------------- WALLET MODAL ---------------- */}
       {modalOpen.value && (
-        <div class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <div class="text-center">
-              <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                Scan with Xaman
-              </h2>
-              <p class="text-sm text-gray-600 mb-6">
-                Open the Xaman app and scan this QR code to sign in
-              </p>
-
-              <div class="bg-gray-50 p-6 rounded-xl mb-6 min-h-64 flex items-center justify-center">
-                {qrCode.value ? (
-                  <img
-                    src={qrCode.value}
-                    alt="Xaman QR Code"
-                    height="64"
-                    width="64"
-                    class="mx-auto w-64 h-64 object-contain"
+        <div class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div class="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl">
+            {!selectedWallet.value && (
+              <>
+                <h2 class="text-xl font-bold mb-4">Connect Wallet</h2>
+                <div class="flex flex-col gap-3">
+                  <WalletButton
+                    id="xaman"
+                    label="Xaman"
+                    description="Mobile-first XRPL wallet"
                   />
-                ) : (
-                  <div class="flex flex-col items-center gap-4">
-                    <svg
-                      class="animate-spin h-12 w-12 text-black"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                      />
-                      <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    <span class="text-gray-600">Preparing QR code...</span>
-                  </div>
+                  <WalletButton
+                    id="ledger"
+                    label="Ledger"
+                    description="Hardware wallet (coming soon)"
+                  />
+                  <WalletButton
+                    id="crossmark"
+                    label="Crossmark"
+                    description="Browser extension wallet"
+                  />
+                  <WalletButton
+                    id="walletconnect"
+                    label="WalletConnect"
+                    description="Connect via QR / mobile wallets"
+                  />
+                </div>
+              </>
+            )}
+
+            {selectedWallet.value === "xaman" && (
+              <>
+                <h2 class="text-xl font-bold mb-2">Scan with Xaman</h2>
+                <p class="text-sm text-gray-500 mb-4">
+                  Open the Xaman app and scan to connect
+                </p>
+
+                <div class="bg-gray-100 rounded-xl p-6 flex items-center justify-center min-h-64">
+                  {qrCode.value ? (
+                    <img
+                      src={qrCode.value}
+                      height="100"
+                      width="100"
+                      class="w-56 h-56"
+                    />
+                  ) : (
+                    <Spinner />
+                  )}
+                </div>
+
+                {pollError.value && (
+                  <p class="text-sm text-red-600 mt-3">{pollError.value}</p>
                 )}
-              </div>
+              </>
+            )}
 
-              <div class="flex items-center justify-center gap-2 text-sm text-gray-500 mb-6">
-                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                    fill="none"
-                  />
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Waiting for confirmation...
-              </div>
-
-              {pollError.value && (
-                <p class="text-red-600 text-sm mb-4">{pollError.value}</p>
-              )}
-
-              <button
-                onClick$={() => {
-                  modalOpen.value = false;
-                  connecting.value = false;
-                  qrCode.value = null;
-                  pollError.value = null;
-                }}
-                class="text-sm text-gray-600 hover:text-gray-900 font-medium"
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick$={closeModal}
+              class="mt-6 text-sm text-gray-500 hover:text-black"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

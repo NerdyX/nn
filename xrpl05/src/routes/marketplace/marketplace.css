@@ -23,6 +23,91 @@ input[type="text"] {
   color: black;
 }
 
+.market-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #05060a, #0f1220 40%, #1b1f3b);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.market-marquee {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  padding: 1.5rem 2rem;
+  width: max-content;
+  animation: market-scroll 45s linear infinite;
+  will-change: transform;
+}
+
+.market-header:hover .market-marquee {
+  animation-play-state: paused;
+}
+
+@keyframes market-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Items */
+.marquee-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.marquee-item img {
+  border-radius: 10px;
+}
+
+.marquee-item strong {
+  font-weight: 600;
+}
+
+.marquee-item span {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+/* Variants */
+.marquee-featured strong {
+  font-size: 1rem;
+}
+
+.marquee-highlight strong {
+  color: #4ade80;
+}
+
+.positive {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.muted {
+  opacity: 0.6;
+}
+
+.label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+
+.marquee-separator {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
 input[type="text"]:focus {
   outline: none;
   border-color: #4ade80;

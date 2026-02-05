@@ -45,6 +45,13 @@ export default component$(() => {
     currentPage.value * pageSize,
   );
 
+  const Stat = ({ label, value }: { label: string; value: string }) => (
+    <div class="bg-black/60 text-white px-4 py-2 rounded-xl text-sm">
+      <div class="text-white/60 text-xs">{label}</div>
+      <div class="font-semibold">{value}</div>
+    </div>
+  );
+
   return (
     <div class="min-h-screen bg-white text-black pb-20">
       {/* Search */}
@@ -59,6 +66,145 @@ export default component$(() => {
           }
         />
       </div>
+
+      {/* Featured Header */}
+      <section class="mt-3 relative overflow-hidden bg-linear-to-r from-violet-600 to-indigo-700">
+        <div class="max-w-7xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-10 items-center">
+          <div>
+            <h1 class="text-5xl font-bold text-white leading-tight">
+              Discover the XRPL NFT Economy
+            </h1>
+            <p class="mt-4 text-white/80 max-w-lg">
+              Explore trending collections, top movers, and record-breaking
+              sales across the XRP Ledger ecosystem.
+            </p>
+            {/* Stats */}
+            <div class="flex flex-wrap gap-3">
+              <Stat label="Floor Price" value="4.38 XRP" />
+              <Stat label="Items" value="8,888" />
+              <Stat label="Total Volume" value="505K XRP" />
+              <Stat label="Listed" value="2.7%" />
+            </div>
+          </div>
+
+          <div class="hidden md:block">
+            <img
+              src={nfts.value[0].image}
+              class="rounded-2xl shadow-2xl rotate-2"
+              alt="Featured NFT"
+              width={400}
+              height={400}
+              loading="lazy"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Trending Collections */}
+      <section class="max-w-7xl mx-auto px-6 mt-14">
+        <h2 class="text-2xl font-bold mb-6">🔥 Trending Collections</h2>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              class="rounded-2xl border p-5 hover:shadow-lg transition"
+            >
+              <div class="flex items-center gap-4">
+                <img
+                  src={`https://picsum.photos/seed/collection${i}/100/100`}
+                  class="w-14 h-14 rounded-xl"
+                  height={100}
+                  width={100}
+                  loading="lazy"
+                />
+                <div>
+                  <p class="font-semibold">Collection {i}</p>
+                  <p class="text-xs text-slate-500">
+                    Floor: {(i * 2.3).toFixed(2)} XRP
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-4 text-xs text-slate-400">
+                Volume 24h: {(Math.random() * 1000).toFixed(0)} XRP
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Daily Top Movers */}
+      <section class="max-w-7xl mx-auto px-6 mt-16">
+        <h2 class="text-2xl font-bold mb-6">📈 Daily Top Movers</h2>
+
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse">
+            <thead>
+              <tr class="text-left text-sm text-slate-500 border-b">
+                <th class="pb-3">NFT</th>
+                <th>Collection</th>
+                <th>Price</th>
+                <th>24h %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nfts.value.slice(0, 5).map((nft) => (
+                <tr
+                  key={nft.id}
+                  class="border-b hover:bg-slate-50 cursor-pointer"
+                  onClick$={() => (selectedNft.value = nft)}
+                >
+                  <td class="py-4 flex items-center gap-3">
+                    <img
+                      src={nft.image}
+                      class="w-10 h-10 rounded-lg"
+                      height={100}
+                      width={100}
+                      loading="lazy"
+                    />
+                    <span class="font-medium">{nft.name}</span>
+                  </td>
+                  <td class="text-sm">{nft.collection}</td>
+                  <td class="text-sm">{nft.price}</td>
+                  <td class="text-green-600 text-sm font-semibold">
+                    +{(Math.random() * 25).toFixed(2)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Highest Weekly Sale */}
+      <section class="max-w-7xl mx-auto px-6 mt-20">
+        <h2 class="text-2xl font-bold mb-6">🏆 Highest Weekly Sale</h2>
+
+        <div class="flex flex-col md:flex-row gap-8 items-center border rounded-2xl p-6">
+          <img
+            src={nfts.value[3].image}
+            class="w-full md:w-80 rounded-xl shadow-lg"
+            height={100}
+            width={100}
+            loading="lazy"
+          />
+
+          <div>
+            <h3 class="text-3xl font-bold mb-2">{nfts.value[3].name}</h3>
+            <p class="text-slate-500 mb-2">{nfts.value[3].collection}</p>
+            <p class="text-lg font-semibold text-green-600 mb-4">
+              Sold for {(Math.random() * 500 + 200).toFixed(0)} XRP
+            </p>
+            <button
+              class="px-5 py-3 bg-violet-600 text-white rounded-xl hover:bg-violet-700"
+              onClick$={() => (selectedNft.value = nfts.value[3])}
+            >
+              View NFT
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* NFT Grid */}
       <main class="max-w-7xl mx-auto px-6 mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

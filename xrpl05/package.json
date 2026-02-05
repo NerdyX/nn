@@ -51,6 +51,8 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "@types/jquery": "^3.5.33",
+    "jquery": "^4.0.0",
     "three": "^0.182.0",
     "xaman": "^1.0.0",
     "xrpl": "^4.5.0",

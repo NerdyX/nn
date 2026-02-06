@@ -1,41 +1,33 @@
-// src/components/header/header.tsx
-import {
-  component$,
-  useSignal,
-  $,
-  useContext,
-  useVisibleTask$,
-  useStylesScoped$,
-} from "@builder.io/qwik";
-import { Link, useNavigate } from "@builder.io/qwik-city";
-import { useXamanSession } from "~/routes/layout";
-import { NetworkContext } from "~/routes/layout";
-import headerStyles from "./header.css?inline";
+import { component$, useSignal, $, useContext } from "@builder.io/qwik";
+import { Link, useNavigate, useLocation } from "@builder.io/qwik-city";
+import { useXamanSession, NetworkContext } from "~/routes/layout";
 
-//const CONTEXT_ROUTES = ["/dashboard", "/marketplace", "/explorer"];
+import NetworkToggle from "../ui/network-toggle";
+//import { ScrollWheel } from "../ui/scroll-wheel";
 
-type WalletType = "xaman" | "ledger" | "crossmark" | "walletconnect" | null;
-
-interface ScrollWheelProps {
-  items: string[];
-  value: string;
-  onChange$: (value: string) => void;
-}
+type WalletType =
+  | "xaman"
+  | "ledger"
+  | "gem"
+  | "grin"
+  | "joey"
+  | "crossmark"
+  | "walletconnect"
+  | null;
 
 export type NavItem = {
   id: string;
   label: string;
   href?: string;
-  icon?: string;
-  pages?: string[]; // routes where it appears
-  min?: "mobile" | "md" | "lg"; // breakpoint visibility
+  pages?: string[];
+  min?: "mobile" | "md" | "lg";
 };
 
 export const NAV_ITEMS: NavItem[] = [
   {
     id: "home",
-    label: "Home",
-    href: "/",
+    label: "Explorer",
+    href: "/explorer",
     pages: ["*"],
     min: "mobile",
   },
@@ -43,116 +35,42 @@ export const NAV_ITEMS: NavItem[] = [
     id: "market",
     label: "Marketplace",
     href: "/marketplace",
-    pages: ["/marketplace"],
+    pages: ["*", "/marketplace"],
     min: "mobile",
-  },
-  {
-    id: "featured",
-    label: "Featured",
-    pages: ["/marketplace"],
-    min: "lg",
-  },
-  {
-    id: "trending",
-    label: "Trending",
-    pages: ["/marketplace"],
-    min: "lg",
-  },
-  {
-    id: "stats",
-    label: "Stats",
-    pages: ["/marketplace"],
-    min: "lg",
-  },
-  {
-    id: "ledger",
-    label: "Ledger",
-    href: "/ledger",
-    pages: ["/ledger", "/dashboard"],
-    min: "md",
   },
 ];
 
-export const ScrollWheel = component$<ScrollWheelProps>(
-  ({ items, value, onChange$ }) => {
-    const containerRef = useSignal<HTMLElement>();
-    const activeIndex = useSignal(items.indexOf(value));
-
-    useVisibleTask$(() => {
-      const el = containerRef.value;
-      if (!el) return;
-
-      const itemHeight = 48;
-      el.scrollTop = activeIndex.value * itemHeight;
-    });
-
-    return (
-      <div class="wheel-wrapper">
-        <div
-          ref={containerRef}
-          class="wheel"
-          onScroll$={() => {
-            const el = containerRef.value!;
-            const index = Math.round(el.scrollTop / 48);
-
-            if (index !== activeIndex.value) {
-              activeIndex.value = index;
-              onChange$(items[index]);
-
-              // HAPTIC FEEDBACK
-              if ("vibrate" in navigator) {
-                navigator.vibrate(8);
-              }
-            }
-          }}
-        >
-          {items.map((item, i) => (
-            <div
-              key={item}
-              class={{
-                "wheel-item": true,
-                active: i === activeIndex.value,
-              }}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
-
-        {/* Center highlight */}
-        <div class="wheel-highlight" />
-      </div>
-    );
-  },
-);
+const minClass = (min?: NavItem["min"]) => {
+  if (min === "md") return "hidden md:flex";
+  if (min === "lg") return "hidden lg:flex";
+  return "flex";
+};
 
 export const Header = component$(() => {
-  useStylesScoped$(headerStyles);
-  const mobileOpen = useSignal(false);
-  const connecting = useSignal(false);
-
   const session = useXamanSession();
   const nav = useNavigate();
   const { activeNetwork } = useContext(NetworkContext);
 
-  const isConnected = session.value?.connected ?? false;
-  const address = session.value?.address;
-  const shortAddress = address
-    ? `${address.slice(0, 6)}…${address.slice(-4)}`
-    : "";
-
-  const isXahau = useSignal(activeNetwork.value === "xahau");
-
-  /* ---------------- MODAL STATE ---------------- */
+  const mobileOpen = useSignal(false);
   const modalOpen = useSignal(false);
   const selectedWallet = useSignal<WalletType>(null);
-
-  // Xaman specific
   const qrCode = useSignal<string | null>(null);
   const pollError = useSignal<string | null>(null);
+  const connecting = useSignal(false);
+
+  const loc = useLocation();
+  const pathname = loc.url.pathname;
+
+  const isConnected = session.value?.connected ?? false;
+  const address = session.value?.address ?? "";
+  const shortAddress = `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) =>
+      !item.pages || item.pages.includes("*") || item.pages.includes(pathname),
+  );
 
   /* ---------------- HANDLERS ---------------- */
-
   const openWalletModal = $(() => {
     modalOpen.value = true;
     selectedWallet.value = null;
@@ -168,31 +86,23 @@ export const Header = component$(() => {
     pollError.value = null;
   });
 
-  const handleToggleNetwork = $((event: InputEvent) => {
-    const checked = (event.target as HTMLInputElement).checked;
-    activeNetwork.value = checked ? "xahau" : "xrpl";
-    isXahau.value = checked;
-  });
-
-  const handleDisconnect = $(async () => {
+  const handleDisconnect = $(() => {
     document.cookie = "xaman_jwt=; Max-Age=0; path=/;";
     nav("/");
   });
 
-  const selectWallet = $((wallet: WalletType) => {
+  const selectWallet = $(async (wallet: WalletType) => {
     selectedWallet.value = wallet;
-
     if (wallet === "xaman") {
       connecting.value = true;
-      // 🔴 Hook your existing Xaman QR init logic here
-      // set qrCode.value = "...";
+      // 🔴 Hook your existing Xaman QR logic here
+      // qrCode.value = "...";
     }
   });
 
   /* ---------------- UI HELPERS ---------------- */
-
   const Spinner = () => (
-    <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+    <svg class="animate-spin h-6 w-6" viewBox="0 0 24 24">
       <circle
         class="opacity-25"
         cx="12"
@@ -210,93 +120,66 @@ export const Header = component$(() => {
     </svg>
   );
 
-  const WalletButton = ({
-    id,
-    label,
-    description,
-  }: {
-    id: WalletType;
-    label: string;
-    description: string;
-  }) => (
-    <button
-      onClick$={() => selectWallet(id)}
-      class="w-full rounded-xl border border-gray-200 px-4 py-4 text-left hover:bg-gray-50 transition"
-    >
-      <div class="font-semibold">{label}</div>
-      <div class="text-sm text-gray-500">{description}</div>
-    </button>
-  );
-
-  /* ---------------- RENDER ---------------- */
-
   return (
     <>
-      <header class="w-full bg-gray-400 top-0 left-0 right-0 z-50">
-        <div
-          class="glass-panel
-                  flex h-14 md:h-16 items-center justify-between
-                  px-5 md:px-8
-                  transition-all duration-300"
-        >
+      {/* ---------------- HEADER ---------------- */}
+      <header class="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+        <div class="flex h-14 md:h-16 max-w-5xl w-full items-center justify-between rounded-full bg-white/10 dark:bg-black/40 backdrop-blur-xl border border-white/20 shadow-lg px-5 md:px-8 transition-all duration-300">
           {/* Logo */}
-          <Link class="flex items-center gap-2 ml-5" href="/">
-            <span class="text-lg font-semibold tracking-tight">
-              {"{XRPL}"}OS
-            </span>
+          <Link href="/" class="flex items-center gap-2">
+            <span class="text-lg font-semibold text-white tracking-tight">{`{XRPL}OS`}</span>
           </Link>
 
           {/* Desktop Nav */}
-          <nav class="hidden md:flex items-center gap-6">
-            <Link href="/explorer">Explorer</Link>
-            <Link href="/marketplace">Marketplace</Link>
-            <Link href="/about">About</Link>
-            <Link href="/docs">Docs</Link>
+          <nav class="hidden md:flex items-center gap-2">
+            {visibleNavItems.map((item) =>
+              item.href ? (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  class={`px-4 py-1.5 rounded-full text-sm transition ${minClass(item.min)} ${
+                    pathname === item.href
+                      ? "bg-white/20 text-white"
+                      : "text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <span
+                  key={item.id}
+                  class={`px-4 py-1.5 text-sm text-white/40 ${minClass(item.min)}`}
+                >
+                  {item.label}
+                </span>
+              ),
+            )}
           </nav>
 
           {/* Desktop Actions */}
-          <div class="hidden md:flex items-center gap-6">
-            {/* Network Toggle */}
-            <div class="flex items-center gap-2">
-              <span class="text-sm">{isXahau.value ? "Xahau" : "XRPL"}</span>
-              <label class="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={isXahau.value}
-                  onInput$={handleToggleNetwork}
-                />
-                <div class="toggle-switch-background">
-                  <div class="toggle-switch-handle" />
-                </div>
-              </label>
-            </div>
+          <div class="hidden md:flex items-center gap-4">
+            {pathname !== "/" && <NetworkToggle />}
 
-            {/* Wallet */}
             {isConnected ? (
-              <div class="flex items-center gap-3">
-                <span class="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full">
-                  {shortAddress}
-                </span>
-                <button
-                  onClick$={handleDisconnect}
-                  class="bg-red-600 text-white px-4 py-1.5 rounded-md"
-                >
-                  Disconnect
-                </button>
-              </div>
+              <button
+                onClick$={handleDisconnect}
+                class="rounded-full bg-emerald-500/90 px-4 py-1.5 text-sm font-medium text-black hover:bg-emerald-400 transition"
+              >
+                {shortAddress}
+              </button>
             ) : (
               <button
                 onClick$={openWalletModal}
-                class="bg-black text-white px-6 py-1.5 rounded-md"
+                class="rounded-full bg-amber-500 px-8 py-1.5 text-sm font-medium text-black hover:bg-white transition"
               >
-                Connect Wallet
+                Connect
               </button>
             )}
           </div>
 
           {/* Mobile Menu Toggle */}
           <button
-            class="md:hidden"
+            class="md:hidden flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/20"
             onClick$={() => (mobileOpen.value = !mobileOpen.value)}
           >
             ☰
@@ -304,70 +187,72 @@ export const Header = component$(() => {
         </div>
       </header>
 
+      {/* ---------------- MOBILE NAV ---------------- */}
+      {mobileOpen.value && (
+        <div class="fixed inset-x-4 top-20 z-40 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/10 shadow-xl p-4 md:hidden">
+          <div class="flex flex-col gap-2">
+            {visibleNavItems.map((item) =>
+              item.href ? (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  onClick$={() => (mobileOpen.value = false)}
+                  class="rounded-xl px-4 py-3 text-white/90 hover:bg-white/10 transition"
+                >
+                  {item.label}
+                </Link>
+              ) : null,
+            )}
+            {pathname !== "/" && (
+              <div class="pt-3 border-t border-white/10">
+                <NetworkToggle />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ---------------- WALLET MODAL ---------------- */}
-      {modalOpen.value && (
-        <div class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div class="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl">
-            {!selectedWallet.value && (
-              <>
-                <h2 class="text-xl font-bold mb-4">Connect Wallet</h2>
-                <div class="flex flex-col gap-3">
-                  <WalletButton
-                    id="xaman"
-                    label="Xaman"
-                    description="Mobile-first XRPL wallet"
-                  />
-                  <WalletButton
-                    id="ledger"
-                    label="Ledger"
-                    description="Hardware wallet (coming soon)"
-                  />
-                  <WalletButton
-                    id="crossmark"
-                    label="Crossmark"
-                    description="Browser extension wallet"
-                  />
-                  <WalletButton
-                    id="walletconnect"
-                    label="WalletConnect"
-                    description="Connect via QR / mobile wallets"
-                  />
-                </div>
-              </>
+      {mobileOpen.value && (
+        <div class="fixed inset-x-4 top-20 z-40 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/10 shadow-xl p-4 md:hidden">
+          <div class="flex flex-col gap-2">
+            {visibleNavItems.map((item) =>
+              item.href ? (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  onClick$={() => (mobileOpen.value = false)}
+                  class="rounded-xl px-4 py-3 text-white/90 hover:bg-white/10 transition"
+                >
+                  {item.label}
+                </Link>
+              ) : null,
             )}
 
-            {selectedWallet.value === "xaman" && (
-              <>
-                <h2 class="text-xl font-bold mb-2">Scan with Xaman</h2>
-                <p class="text-sm text-gray-500 mb-4">
-                  Open the Xaman app and scan to connect
-                </p>
-
-                <div class="bg-gray-100 rounded-xl p-6 flex items-center justify-center min-h-64">
-                  {qrCode.value ? (
-                    <img
-                      src={qrCode.value}
-                      height="100"
-                      width="100"
-                      class="w-56 h-56"
-                    />
-                  ) : (
-                    <Spinner />
-                  )}
-                </div>
-
-                {pollError.value && (
-                  <p class="text-sm text-red-600 mt-3">{pollError.value}</p>
-                )}
-              </>
+            {pathname !== "/" && (
+              <div class="pt-3 border-t border-white/10">
+                <NetworkToggle />
+              </div>
             )}
 
-            <button
-              onClick$={closeModal}
-              class="mt-6 text-sm text-gray-500 hover:text-black"
-            >
-              Cancel
-            </button>
+            {/* Connect / Disconnect Button */}
+            <div class="pt-3 border-t border-white/10">
+              {isConnected ? (
+                <button
+                  onClick$={handleDisconnect}
+                  class="w-full rounded-xl bg-emerald-500/90 px-4 py-3 text-black hover:bg-emerald-400 transition"
+                >
+                  {shortAddress}
+                </button>
+              ) : (
+                <button
+                  onClick$={openWalletModal}
+                  class="w-full rounded-xl bg-white/90 px-4 py-3 text-black hover:bg-white transition"
+                >
+                  Connect Wallet
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -4,28 +4,51 @@ import {
   useTask$,
   useResource$,
   Resource,
+  $,
+  noSerialize,
+  type NoSerialize,
 } from "@builder.io/qwik";
 
-// -- Network selection --
-type Network = "xrpl" | "xahau";
-type XRPLResponse = any;
+import { Client, dropsToXrp } from "xrpl";
 
-let ws: WebSocket | null = null;
-let nextId = 1;
+import type { LedgerStream, TransactionStream } from "xrpl";
 
-// -- Network Search --
+// ──────────────────────────────────────────────
+// Config
+// ──────────────────────────────────────────────
+
 const NETWORKS = [
-  { label: "Mainnet", url: "wss://s1.ripple.com" },
-  { label: "Testnet", url: "wss://s.altnet.rippletest.net:51233" },
-  { label: "Devnet", url: "wss://s.devnet.rippletest.net:51233" },
-];
+  { key: "mainnet", label: "Mainnet", url: "wss://xrplcluster.com" },
+  { key: "xahau", label: "Xahau", url: "wss://xahau.network" },
+  {
+    key: "testnet",
+    label: "Testnet",
+    url: "wss://s.altnet.rippletest.net:51233",
+  },
+  {
+    key: "devnet",
+    label: "Devnet",
+    url: "wss://s.devnet.rippletest.net:51233",
+  },
+] as const;
+
+type NetworkKey = (typeof NETWORKS)[number]["key"];
+
+const ENDPOINTS = {
+  xrpl: ["wss://xrplcluster.com", "wss://s1.ripple.com", "wss://xrpl.ws"],
+  xahau: ["wss://xahau.network", "wss://rpc.xahau.network"],
+};
+
+// ──────────────────────────────────────────────
+// Types (from your original + improvements)
+// ──────────────────────────────────────────────
 
 interface TxEvent {
   hash: string;
   TransactionType: string;
   Account: string;
-  date?: string;
-  amount?: string;
+  date?: number;
+  amount?: string; // human readable
   destination?: string;
 }
 
@@ -36,53 +59,32 @@ interface AccountInfo {
   owner_count: number;
 }
 
-function connectAndQuery(
-  wsUrl: string,
-  queryType: string,
-  accountOrParam: string,
-  onResult: (res: XRPLResponse) => void,
-  onError: (err: string) => void,
-) {
-  try {
-    if (ws && ws.readyState === WebSocket.OPEN) ws.close();
-
-    ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      const req: any = {
-        id: nextId++,
-        command: queryType as string,
-        account: accountOrParam,
-        strict: true,
-        ledger_index: "validated",
-      };
-
-      // Special params for specific queries
-      if (queryType === "ledger")
-        req.ledger_index = accountOrParam || "validated";
-      if (queryType === "tx_history") req.limit = 20;
-      if (queryType === "account_nft") req.limit = 100;
-
-      ws!.send(JSON.stringify(req));
-    };
-
-    ws.onerror = () => onError("WebSocket connection failed");
-  } catch (e: any) {
-    onError(e?.message || "Connection failed");
-  }
+async function connectFast(urls: string[]) {
+  return Promise.any(
+    urls.map(async (url) => {
+      const c = new Client(url);
+      await c.connect();
+      return c;
+    }),
+  );
 }
 
+// ──────────────────────────────────────────────
+// Component
+// ──────────────────────────────────────────────
+
 export default component$(() => {
-  // --- Signals ---
-  const network = useSignal<Network>("xrpl");
+  const network = useSignal<NetworkKey>("testnet"); // safe default
   const address = useSignal("");
   const searchQuery = useSignal("");
+  const queryType = useSignal<"account_info" | "tx" | "ledger">("account_info");
 
-  const status = useSignal("disconnected");
+  const status = useSignal<"disconnected" | "connecting" | "connected">(
+    "disconnected",
+  );
   const ledgers = useSignal<any[]>([]);
   const txs = useSignal<TxEvent[]>([]);
 
-  const quorum = useSignal<number | null>(null);
   const loadFee = useSignal<number | null>(null);
 
   const ledgerIntervals = useSignal<number[]>([]);
@@ -90,15 +92,34 @@ export default component$(() => {
   const feeSamples = useSignal<number[]>([]);
 
   const lastLedgerClose = useSignal<number | null>(null);
-  //const lastLedgerIndex = useSignal<number | null>(null);
-  //const lastLedgerHash = useSignal<string | null>(null);
-  //const lastLedgerTime = useSignal<Date | null>(null);
 
-  const queryType = useSignal("account_info");
-  const result = useSignal<XRPLResponse | null>(null);
-  const detailedResult = useSignal<XRPLResponse | null>(null);
+  const detailedResult = useSignal<any>(null);
+  const queryError = useSignal<string | null>(null);
 
-  // -- Colour Legend --
+  // Client (noSerialize prevents Qwik crash)
+  const client = useSignal<NoSerialize<Client> | null>(null);
+
+  // ─── Utils ─────────────────────────────────────
+
+  const avg = $((arr: number[]) =>
+    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0,
+  );
+
+  const avgLedgerInterval = $(async () =>
+    (await avg(ledgerIntervals.value)).toFixed(2),
+  );
+  const avgTxnPerLedger = $(async () =>
+    (await avg(txnCounts.value)).toFixed(0),
+  );
+  const avgTxnFee = $(async () => (await avg(feeSamples.value)).toFixed(6));
+
+  const txnPerSec = $(async () => {
+    const interval = await avg(ledgerIntervals.value);
+    return interval > 0
+      ? ((await avg(txnCounts.value)) / interval).toFixed(2)
+      : "0.00";
+  });
+
   const txColor = (type?: string) => {
     switch (type) {
       case "Payment":
@@ -107,7 +128,7 @@ export default component$(() => {
       case "OfferCancel":
         return "bg-blue-400";
       case "TrustSet":
-        return "bg-cyan-400";
+        return "bg-red-400";
       case "NFTokenMint":
       case "NFTokenBurn":
         return "bg-purple-400";
@@ -118,156 +139,183 @@ export default component$(() => {
     }
   };
 
-  // --- Resource for account info + txs ---
+  // ─── Live Data Subscription ────────────────────
+
+  useTask$(async ({ track, cleanup }) => {
+    track(() => network.value);
+
+    // Cleanup old client
+    if (client.value) {
+      try {
+        await client.value.disconnect();
+      } catch {}
+      client.value = null;
+    }
+
+    status.value = "connecting";
+
+    const net = NETWORKS.find((n) => n.key === network.value)!;
+    const newClient = new Client(net.url);
+
+    try {
+      await newClient.connect();
+      status.value = "connected";
+
+      // Subscribe to streams
+      await newClient.request({
+        command: "subscribe",
+        streams: ["ledger", "transactions"], // validated tx only; use "transactions_proposed" if you want unconfirmed
+      });
+
+      status.value = "connected";
+
+      newClient
+        .request({ command: "server_info" })
+        .then((info) => {
+          loadFee.value = info.result.info.load_factor ?? null;
+        })
+        .catch(() => {});
+
+      // Initial server info
+      const info = await newClient.request({ command: "server_info" });
+      loadFee.value = info.result.info.load_factor ?? null;
+
+      client.value = noSerialize(newClient);
+
+      // Ledger closed events
+      newClient.on("ledgerClosed", (msg: LedgerStream) => {
+        const now = Date.now();
+        if (lastLedgerClose.value) {
+          const interval = (now - lastLedgerClose.value) / 0.001;
+          ledgerIntervals.value = [
+            interval,
+            ...ledgerIntervals.value.slice(0, 19),
+          ];
+        }
+        lastLedgerClose.value = now;
+
+        txnCounts.value = [msg.txn_count ?? 0, ...txnCounts.value.slice(0, 19)];
+
+        ledgers.value = [
+          {
+            ledger_index: msg.ledger_index,
+            ledger_hash: msg.ledger_hash,
+            close_time_human: new Date(
+              (msg.ledger_time + 946684800) * 1000,
+            ).toLocaleString(),
+            txn_count: msg.txn_count ?? 0,
+          },
+          ...ledgers.value.slice(0, 11),
+        ];
+      });
+
+      // Validated transaction events
+      newClient.on("transaction", (msg: TransactionStream) => {
+        if (!msg.validated) return;
+
+        const tx = msg.transaction;
+        let amountStr: string | undefined;
+        if (tx.Amount) {
+          amountStr =
+            typeof tx.Amount === "string"
+              ? dropsToXrp(tx.Amount)
+              : `${tx.Amount.value} ${tx.Amount.currency}`;
+        }
+
+        txs.value = [
+          {
+            hash: msg.hash,
+            TransactionType: tx.TransactionType,
+            Account: tx.Account,
+            date: tx.date,
+            amount: amountStr,
+            destination: tx.Destination,
+          },
+          ...txs.value.slice(0, 19),
+        ];
+
+        if (tx.Fee) {
+          const feeXrp = Number(tx.Fee) / 1_000_000;
+          feeSamples.value = [feeXrp, ...feeSamples.value.slice(0, 49)];
+        }
+      });
+    } catch (err: any) {
+      console.error("Connection failed:", err);
+      status.value = "disconnected";
+    }
+
+    cleanup(async () => {
+      if (client.value)
+        try {
+          await client.value.disconnect();
+        } catch {}
+    });
+  });
+
+  // ─── Manual Query ──────────────────────────────
+
+  const runQuery = $(async () => {
+    if (!client.value || !address.value.trim()) return;
+
+    queryError.value = null;
+    detailedResult.value = null;
+
+    try {
+      const input = address.value.trim();
+      let req: any;
+
+      if (queryType.value === "account_info") {
+        req = {
+          command: "account_info",
+          account: input,
+          ledger_index: "validated",
+        };
+      } else if (queryType.value === "tx") {
+        req = { command: "tx", transaction: input };
+      } else if (queryType.value === "ledger") {
+        req = {
+          command: "ledger",
+          ledger_hash: input.match(/^[A-F0-9]{64}$/) ? input : undefined,
+          ledger_index: input.match(/^[A-F0-9]{64}$/) ? undefined : input,
+          transactions: true,
+        };
+      }
+
+      const resp = await client.value.request(req);
+      detailedResult.value = resp.result;
+    } catch (err: any) {
+      queryError.value = err.message || "Query failed";
+    }
+  });
+
+  // ─── Account Resource (your original backend fetch) ───
+
   const resource = useResource$<{
     account?: AccountInfo;
     transactions?: TxEvent[];
   }>(async ({ track }) => {
     track(() => searchQuery.value);
 
-    if (typeof window === "undefined") return {}; // client-only
-    if (!searchQuery.value) return {};
+    if (typeof window === "undefined" || !searchQuery.value) return {};
 
     try {
       const res = await fetch(
         `/api/explorer?network=${network.value}&address=${searchQuery.value}`,
       );
-      if (!res.ok) throw new Error(`Failed to fetch account`);
-
-      return res.json();
+      if (!res.ok) throw new Error("Failed to fetch account data");
+      return await res.json();
     } catch (e) {
       console.error("Explorer fetch error:", e);
       return {};
     }
   });
 
-  const avg = (arr: number[]) =>
-    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-
-  const avgLedgerInterval = () => avg(ledgerIntervals.value);
-  const avgTxnPerLedger = () => avg(txnCounts.value);
-  const avgTxnFee = () => avg(feeSamples.value);
-
-  const txnPerSec = () => {
-    const interval = avgLedgerInterval();
-    return interval > 0 ? avgTxnPerLedger() / interval : 0;
-  };
-
-  // --- WebSocket for live ledger & tx events ---
-  useTask$(({ cleanup }) => {
-    let ws: WebSocket | null = null;
-
-    const connect = () => {
-      const url =
-        network.value === "xrpl"
-          ? "wss://xrplcluster.com"
-          : "wss://xahau.network";
-
-      ws = new WebSocket(url);
-
-      ws.onopen = () => {
-        status.value = "connected";
-
-        ws?.send(
-          JSON.stringify({
-            command: "subscribe",
-            streams: ["ledger", "transactions"],
-          }),
-        );
-
-        ws?.send(
-          JSON.stringify({
-            command: "server_info",
-          }),
-        );
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-
-          // ---- SERVER INFO ----
-          if (msg.result?.info) {
-            quorum.value = msg.result.info.quorum ?? null;
-            loadFee.value = msg.result.info.load_factor ?? null;
-          }
-
-          // ---- LEDGER CLOSED ----
-          if (msg.type === "ledgerClosed") {
-            const now = Date.now();
-
-            if (lastLedgerClose.value) {
-              const interval = (now - lastLedgerClose.value) / 1000;
-
-              ledgerIntervals.value = [
-                interval,
-                ...ledgerIntervals.value.slice(0, 19),
-              ];
-            }
-
-            lastLedgerClose.value = now;
-
-            if (msg.txn_count != null) {
-              txnCounts.value = [
-                msg.txn_count,
-                ...txnCounts.value.slice(0, 19),
-              ];
-            }
-
-            ledgers.value = [
-              {
-                ledger_index: msg.ledger_index,
-                ledger_hash: msg.ledger_hash,
-                close_time_human: msg.ledger_time || msg.ledger_close_time,
-                txn_count: msg.txn_count ?? 0,
-              },
-              ...ledgers.value.slice(0, 11),
-            ];
-          }
-
-          // ---- TRANSACTIONS (fees) ----
-          if (msg.transaction?.Fee) {
-            const feeXrp = Number(msg.transaction.Fee) / 1_000_000;
-
-            feeSamples.value = [feeXrp, ...feeSamples.value.slice(0, 49)];
-          }
-          if (msg.transaction) {
-            txs.value = [
-              {
-                hash: msg.transaction.hash,
-                TransactionType: msg.transaction.TransactionType,
-                Account: msg.transaction.Account,
-                date: msg.transaction.date,
-                amount: msg.transaction.Amount,
-                destination: msg.transaction.Destination,
-              },
-              ...txs.value.slice(0, 19),
-            ];
-          }
-        } catch (e) {
-          console.error("WS message parse error:", e);
-        }
-      };
-
-      ws.onclose = () => {
-        status.value = "disconnected";
-      };
-    };
-
-    connect();
-
-    cleanup(() => {
-      ws?.close();
-    });
-  });
-
   return (
     <main class="mx-auto max-w-5xl px-6 py-10">
       <h1 class="text-2xl font-semibold mb-4">Account Explorer</h1>
 
-      {/* Bloomberg-style Search Bar */}
-      <div class="flex gap-3 mb-8 max-w-4xl mx-auto">
-        {/* Main Search */}
+      {/* Search Bar */}
+      <div class="flex flex-col sm:flex-row gap-3 mb-8 max-w-4xl mx-auto">
         <div class="relative flex-1">
           <input
             type="text"
@@ -299,29 +347,25 @@ export default component$(() => {
           </div>
         </div>
 
-        {/* Search Button */}
+        <select
+          class="px-5 py-4 rounded-xl border-2 border-slate-200 bg-white text-slate-900 min-w-[180px]"
+          value={queryType.value}
+          onChange$={(e) =>
+            (queryType.value = (e.target as HTMLSelectElement).value as any)
+          }
+        >
+          <option value="account_info">Account Info</option>
+          <option value="tx">Transaction</option>
+          <option value="ledger">Ledger</option>
+        </select>
+
         <button
-          class="group relative rounded-xl bg-liear-to-r from-slate-900 to-slate-800 px-8 py-4 text-black font-bold text-lg shadow-xl hover:shadow-2xl hover:from-slate-800 hover:to-slate-700 active:scale-[0.98] transition-all duration-200 flex items-center gap-2 hover:gap-3 disabled:opacity-50"
+          class="group relative rounded-xl bg-linear-to-r from-slate-900 to-slate-800 px-8 py-4 text-white font-bold text-lg shadow-xl hover:shadow-2xl hover:from-slate-800 hover:to-slate-700 active:scale-[0.98] transition-all duration-200 flex items-center gap-2 hover:gap-3 disabled:opacity-50"
           onClick$={() => {
-            searchQuery.value = address.value; // YOUR EXISTING LOGIC
-            // NEW: Run detailed query
-            const url =
-              network.value === "xrpl"
-                ? NETWORKS[0].url
-                : "wss://xahau.network:51234";
-            connectAndQuery(
-              url,
-              queryType.value,
-              address.value,
-              (res) => {
-                detailedResult.value = res;
-              },
-              (err) => {
-                console.error(err);
-              },
-            );
+            searchQuery.value = address.value;
+            runQuery();
           }}
-          disabled={!address.value.trim()}
+          disabled={!address.value.trim() || status.value !== "connected"}
         >
           <svg
             class="w-5 h-5 group-hover:scale-110 transition-transform"
@@ -340,176 +384,174 @@ export default component$(() => {
         </button>
       </div>
 
-      <section class="sticky top-0 z-40 bg-white backdrop-blur border-b border-white/10 mt-6">
-        <div class="grid grid-cols-6 divide-x divide-white/10 text-black">
-          <div class="px-4 py-3 text-center">
-            <div class="text-xs text-black">QUORUM</div>
-            <div class="text-lg font-mono">{quorum.value ?? "--"}</div>
+      {/* Stats Bar */}
+      <section class="sticky top-0 z-40 bg-white backdrop-blur border-b border-slate-200 mt-6">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-slate-200 text-center">
+          <div class="px-4 py-3">
+            <div class="text-xs text-slate-600">Ledger</div>
+            <div class="text-lg font-mono">{status.value}</div>
           </div>
-
-          <div class="px-4 py-3 text-center">
-            <div class="text-xs text-black">AVG. TXN FEE</div>
-            <div class="text-lg font-mono">{avgTxnFee().toFixed(6)} XRP</div>
+          <div class="px-4 py-3">
+            <div class="text-xs text-slate-600">AVG. TXN FEE</div>
+            <div class="text-lg font-mono">{avgTxnFee()} XRP</div>
           </div>
-
-          <div class="px-4 py-3 text-center">
-            <div class="text-xs text-black">AVG. LEDGER INTERVAL</div>
-            <div class="text-lg font-mono">
-              {avgLedgerInterval().toFixed(2)} sec
-            </div>
+          <div class="px-4 py-3">
+            <div class="text-xs text-slate-600">AVG. LEDGER INTERVAL</div>
+            <div class="text-lg font-mono">{avgLedgerInterval()} sec</div>
           </div>
-
-          <div class="px-4 py-3 text-center">
-            <div class="text-xs text-black">AVG. TXN / LEDGER</div>
-            <div class="text-lg font-mono">{avgTxnPerLedger().toFixed(2)}</div>
+          <div class="px-4 py-3">
+            <div class="text-xs text-slate-600">AVG. TXN / LEDGER</div>
+            <div class="text-lg font-mono">{avgTxnPerLedger()}</div>
           </div>
-
-          <div class="px-4 py-3 text-center">
-            <div class="text-xs text-black">TXN / SEC</div>
-            <div class="text-lg font-mono">{txnPerSec().toFixed(2)}</div>
+          <div class="px-4 py-3">
+            <div class="text-xs text-slate-600">TXN / SEC</div>
+            <div class="text-lg font-mono">{txnPerSec()}</div>
           </div>
-
-          <div class="px-4 py-3 text-center">
-            <div class="text-xs text-black">LOAD FEE</div>
+          <div class="px-4 py-3">
+            <div class="text-xs text-slate-600">LOAD FEE</div>
             <div class="text-lg font-mono">{loadFee.value ?? "--"}</div>
           </div>
         </div>
-      </section>
-
-      <section class="mt-8">
-        <div class="relative w-full overflow-hidden">
-          <h2 class="text-lg font-semibold mb-2">
-            Live Ledgers: {status.value}
-          </h2>
-          <div class="flex gap-6">
-            {ledgers.value.map((ledger) => (
-              <div
-                key={ledger.ledger_hash}
-                class="border border-white/10 bg-black/5 rounded-lg p-4 min-w-55 shrink-0
-                       transition-transform duration-10 ease-out"
-              >
-                {/* Header */}
-                <div class="mb-3">
-                  <div class="text-black font-mono text-sm">
-                    {ledger.ledger_index}
-                  </div>
-                  <div class="text-xs text-black">
-                    {ledger.close_time_human}
-                  </div>
+        <div class="flex mt-1.5 overflow-x-auto gap-6 pb-4">
+          {ledgers.value.map((ledger) => (
+            <div
+              key={ledger.ledger_hash}
+              class="border border-slate-200 bg-white rounded-lg p-4 min-w-55
+              shrink-0 shadow-sm"
+            >
+              <div class="mb-3">
+                <div class="font-mono text-sm font-semibold">
+                  {ledger.ledger_index}
                 </div>
-
-                {/* Meta */}
-                <div class="text-xs text-black">
-                  TXN COUNT: <span class="text-black">{ledger.txn_count}</span>
-                </div>
-
-                {/* Matrix */}
-                <div class="grid grid-cols-5 gap-1">
-                  {txs.value.slice(0, 36).map((tx) => (
-                    <span
-                      key={tx.hash}
-                      title={tx.TransactionType}
-                      class={`w-3 h-3 rounded-full ${txColor(tx.TransactionType)}`}
-                    />
-                  ))}
+                <div class="text-xs text-slate-500">
+                  {ledger.close_time_human}
                 </div>
               </div>
-            ))}
-          </div>
+              <div class="text-xs text-slate-600">
+                TXN COUNT: <span class="font-medium">{ledger.txn_count}</span>
+              </div>
+              <div class="grid grid-cols-6 gap-1 mt-3">
+                {txs.value.slice(0, 36).map((tx) => (
+                  <span
+                    key={tx.hash}
+                    title={tx.TransactionType}
+                    class={`w-3 h-3 rounded-full ${txColor(tx.TransactionType)}`}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+          {ledgers.value.length === 0 && (
+            <p class="text-slate-400">Waiting for ledger updates...</p>
+          )}
         </div>
       </section>
 
-      {/* Account Info + Transactions */}
-      <div>
-        <Resource
-          value={resource}
-          onPending={() => <p>Loading account info...</p>}
-          onRejected={(err) => (
-            <p class="text-red-500">Error fetching data: {String(err)}</p>
-          )}
-          onResolved={(data) => (
-            <>
-              {data.account ? (
-                <section class="mb-6 rounded border bg-white p-6">
-                  <h2 class="text-lg font-semibold mb-2">Account Info</h2>
-                  <ul class="text-sm space-y-1">
-                    <li>
-                      <strong>Account:</strong> {data.account.account}
-                    </li>
-                    <li>
-                      <strong>Balance:</strong> {data.account.balance} XRP
-                    </li>
-                    <li>
+      {/* Account Info + Transactions from API */}
+      <Resource
+        value={resource}
+        onPending={() => (
+          <p class="text-center py-8 text-slate-500">Loading account info...</p>
+        )}
+        onRejected={(err) => (
+          <p class="text-red-500 text-center py-8">
+            Error fetching data: {String(err)}
+          </p>
+        )}
+        onResolved={(data) => (
+          <>
+            {data.account && (
+              <section class="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+                <h2 class="text-xl font-bold mb-6">Account Details</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Basic */}
+                  <div class="p-5 bg-slate-50 rounded-xl">
+                    <h3 class="font-semibold mb-3">Basic</h3>
+                    <p>
+                      <strong>Balance:</strong> {data.account.balanceXrp}
+                    </p>
+                    <p>
                       <strong>Sequence:</strong> {data.account.sequence}
-                    </li>
-                    <li>
-                      <strong>Owner Count:</strong> {data.account.owner_count}
-                    </li>
-                  </ul>
-                </section>
-              ) : (
-                <p>No account found.</p>
-              )}
+                    </p>
+                    <p>
+                      <strong>Owner Count:</strong> {data.account.ownerCount}
+                    </p>
+                  </div>
 
-              {data.transactions && data.transactions.length > 0 && (
-                <section class="rounded border bg-white p-6">
-                  <h2 class="text-lg font-semibold mb-2">
-                    Recent Transactions
-                  </h2>
-                  <ul class="text-sm space-y-2">
-                    {data.transactions.map((tx) => (
-                      <li key={tx.hash} class="rounded bg-gray-50 px-3 py-2">
-                        <div class="flex justify-between">
-                          <span>{tx.TransactionType}</span>
-                          <span class="text-gray-500">{tx.date}</span>
+                  {/* Flags */}
+                  <div class="p-5 bg-slate-50 rounded-xl">
+                    <h3 class="font-semibold mb-3">Flags</h3>
+                    <ul class="text-sm space-y-1">
+                      {Object.entries(data.account.flagsDecoded).map(
+                        ([key, val]) =>
+                          val && (
+                            <li key={key}>
+                              ✓ {key.replace(/([A-Z])/g, " $1").trim()}
+                            </li>
+                          ),
+                      )}
+                    </ul>
+                  </div>
+
+                  {/* Assets / Counts */}
+                  <div class="p-5 bg-slate-50 rounded-xl">
+                    <h3 class="font-semibold mb-3">Assets & Activity</h3>
+                    <p>Trust Lines: {data.account.trustLines}</p>
+                    <p>Issued Currencies: {data.account.issuedCurrencies}</p>
+                    <p>Owned NFTs: {data.account.ownedNFTs}</p>
+                    <p>Active Offers: {data.account.activeOffers}</p>
+                    <p>AMM Positions: {data.account.ammPositions}</p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {data.transactions && data.transactions.length > 0 && (
+              <section class="rounded border bg-white p-6 shadow-sm">
+                <h2 class="text-lg font-semibold mb-2">Recent Transactions</h2>
+                <ul class="text-sm space-y-2">
+                  {data.transactions.map((tx) => (
+                    <li key={tx.hash} class="rounded bg-gray-50 px-3 py-2">
+                      <div class="flex justify-between">
+                        <span>{tx.TransactionType}</span>
+                        <span class="text-gray-500">
+                          {tx.date
+                            ? new Date(
+                                (tx.date + 946684800) * 1000,
+                              ).toLocaleString()
+                            : ""}
+                        </span>
+                      </div>
+                      {tx.amount && tx.destination && (
+                        <div class="text-xs text-gray-500">
+                          {tx.amount} → {tx.destination}
                         </div>
-                        {tx.amount && tx.destination && (
-                          <div class="text-xs text-gray-500">
-                            {tx.amount} → {tx.destination}
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </>
-          )}
-        />
-      </div>
-      {result.value && (
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
+        )}
+      />
+
+      {/* Query Results */}
+      {detailedResult.value && (
         <div class="mt-8 p-6 bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200/50">
           <h3 class="text-xl font-bold text-slate-900 mb-4">
             Query Results ({queryType.value})
           </h3>
-          {detailedResult.value?.status === "success" ? (
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 p-6 bg-linear-to-r from-blue-50 to-indigo-50 rounded-2xl">
-              <div>
-                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                  Status
-                </div>
-                <div class="text-2xl font-bold text-emerald-600">Success</div>
-              </div>
-              {detailedResult.value.result?.account && (
-                <div>
-                  <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                    Account
-                  </div>
-                  <div class="text-lg font-mono font-semibold">
-                    {detailedResult.value.result.account.slice(0, 8)}...
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : null}
-
           <pre class="max-h-96 overflow-auto rounded-2xl bg-slate-900/95 p-6 text-xs text-slate-100 font-mono border backdrop-blur-sm">
             {JSON.stringify(detailedResult.value, null, 2)}
           </pre>
         </div>
       )}
-
-      {/* Live Ledger Feed */}
+      {queryError.value && (
+        <div class="mt-8 p-6 bg-red-50 rounded-3xl border border-red-200 text-red-700">
+          {queryError.value}
+        </div>
+      )}
     </main>
   );
 });

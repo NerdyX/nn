@@ -19,7 +19,7 @@ export default component$(() => {
   ];
 
   return (
-    <div class="app-layout">
+    <div class="mt-14 app-layout">
       {/* Sidebar */}
       <aside class="sidebar">
         <nav class="sidebar-nav">

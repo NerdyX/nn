@@ -1,85 +1,258 @@
 // src/routes/api/explorer/index.tsx
 import { RequestHandler } from "@builder.io/qwik-city";
+import { Client, dropsToXrp } from "xrpl";
+import { toast } from "react-toastify";
 
-export const onGet: RequestHandler = async ({ query, json }) => {
+const NODE_TIMEOUT_MS = 8000;
+
+export const onGet: RequestHandler = async ({
+  query,
+  json,
+  error,
+  headers,
+}) => {
   const network = query.get("network") || "xrpl";
-  const address = query.get("address") || "";
+  const address = query.get("address")?.trim();
 
-  if (!address || address.length < 25) {
-    throw { status: 400 };
+  if (!address || address.length < 25 || !address.startsWith("r")) {
+    throw error(
+      400,
+      "Invalid or missing XRPL/Xahau address (must start with 'r')",
+    );
   }
 
-  try {
-    // Map network to WebSocket URL
-    const wsUrls = {
-      xrpl: "wss://s1.ripple.com",
-      xahau: "wss://xahau.network:51234",
-    };
+  // Network fallback nodes (public & reliable)
+  const networkConfig: Record<string, string[]> = {
+    xrpl: [
+      "wss://xrplcluster.com",
+      "wss://s1.ripple.com",
+      "wss://s2.ripple.com",
+      "wss://xrpl.link",
+    ],
+    xahau: [
+      "wss://xahau.network",
+      "wss://xahau-rpc.com",
+      "wss://xahau-rpc2.com",
+    ],
+    testnet: ["wss://s.altnet.rippletest.net:51233"],
+    devnet: ["wss://s.devnet.rippletest.net:51233"],
+  };
 
-    const wsUrl = wsUrls[network as keyof typeof wsUrls] || wsUrls.xrpl;
+  const urls = networkConfig[network] || networkConfig.xrpl;
 
-    // Connect to XRPL WebSocket
-    const ws = new WebSocket(wsUrl);
+  headers.set("Cache-Control", "public, max-age=10"); // cache 10s – balances change slowly
 
-    const response = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        ws.close();
-        reject(new Error("Request timeout"));
-      }, 10000);
+  let lastError: any = null;
 
-      ws.onopen = () => {
-        ws.send(
-          JSON.stringify({
-            id: Date.now(),
-            command: "account_info",
-            account: address,
-            strict: true,
-            ledger_index: "validated",
-          }),
-        );
-      };
+  for (const url of urls) {
+    const client = new Client(url);
 
-      ws.onmessage = (event) => {
-        clearTimeout(timeout);
+    try {
+      // Connect with timeout
+      const connectPromise = client.connect();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Connection timeout")),
+          NODE_TIMEOUT_MS,
+        ),
+      );
+      await Promise.race([connectPromise, timeoutPromise]);
+
+      // ──────────────────────────────────────────────
+      // 1. Core: account_info
+      // ──────────────────────────────────────────────
+      const accountInfo = await client.request({
+        command: "account_info",
+        account: address,
+        ledger_index: "validated",
+        strict: true,
+      });
+
+      const acc = accountInfo.result.account_data || {};
+      const ledgerIndex = accountInfo.result.ledger_index;
+
+      // Decode domain if present
+      let domain = null;
+      if (acc.Domain) {
         try {
-          const data = JSON.parse(event.data);
-          if (data.id === Date.now().toString().slice(-10)) {
-            resolve(data);
-            ws.close();
-          }
-        } catch (e) {
-          reject(e);
+          domain = Buffer.from(acc.Domain, "hex").toString("utf8");
+        } catch (error) {
+          toast.error(`Error decoding domain: ${error.message}`);
         }
-      };
+      }
 
-      ws.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error("WebSocket error"));
-      };
-    });
+      // ──────────────────────────────────────────────
+      // 2. Trust lines (tokens / issued currencies)
+      // ──────────────────────────────────────────────
+      let trustLines = 0;
+      let issuedCurrencies = 0;
+      try {
+        const lines = await client.request({
+          command: "account_lines",
+          account: address,
+          ledger_index: "validated",
+        });
+        trustLines = lines.result.lines?.length || 0;
+        issuedCurrencies =
+          lines.result.lines?.filter((l: any) => l.limit_peer > 0)?.length || 0;
+      } catch (error) {
+        toast.error(`Error fetching trust lines: ${error.message}`);
+      }
 
-    const result = response as any;
+      // ──────────────────────────────────────────────
+      // 3. Recent transactions (last 20)
+      // ──────────────────────────────────────────────
+      let transactions: any[] = [];
+      try {
+        const txRes = await client.request({
+          command: "account_tx",
+          account: address,
+          limit: 20,
+          forward: false, // newest first
+          ledger_index_min: -1,
+          ledger_index_max: -1,
+        });
 
-    if (result.status === "error") {
-      throw { status: 500 };
+        transactions = (txRes.result.transactions || []).map((entry: any) => {
+          const tx = entry.tx || entry;
+          let amountStr: string | undefined;
+
+          if (tx.Amount) {
+            amountStr =
+              typeof tx.Amount === "string"
+                ? dropsToXrp(tx.Amount)
+                : `${tx.Amount.value} ${tx.Amount.currency}${tx.Amount.issuer ? ` (${tx.Amount.issuer.slice(0, 8)}…)` : ""}`;
+          }
+
+          return {
+            hash: tx.hash,
+            type: tx.TransactionType,
+            from: tx.Account,
+            to: tx.Destination,
+            amount: amountStr || tx.Amount?.value || null,
+            fee: tx.Fee ? dropsToXrp(tx.Fee) : null,
+            date: tx.date
+              ? new Date((tx.date + 946684800) * 1000).toISOString()
+              : null,
+            ledger: tx.ledger_index || entry.ledger_index,
+            flags: tx.Flags,
+            memos: tx.Memos || [],
+            destinationTag: tx.DestinationTag || null,
+            // Add more if needed: memos, destinationTag, etc.
+          };
+        });
+      } catch (error) {
+        toast.error(`Error fetching transaction history: ${error.message}`);
+      }
+
+      // ──────────────────────────────────────────────
+      // 4. NFTs count
+      // ──────────────────────────────────────────────
+      let nftCount = 0;
+      try {
+        const nfts = await client.request({
+          command: "account_nfts",
+          account: address,
+          limit: 1, // we only need count
+        });
+        nftCount = nfts.result.account_nfts?.length || 0;
+      } catch (error) {
+        toast.error(`Error fetching NFT count: ${error.message}`);
+      }
+
+      // ──────────────────────────────────────────────
+      // 5. Active offers count
+      // ──────────────────────────────────────────────
+      let offerCount = 0;
+      try {
+        const offers = await client.request({
+          command: "account_offers",
+          account: address,
+          limit: 1,
+        });
+        offerCount = offers.result.offers?.length || 0;
+      } catch (error) {
+        toast.error(`Error fetching offer count: ${error.message}`);
+      }
+
+      // ──────────────────────────────────────────────
+      // 6. AMM positions (count only)
+      // ──────────────────────────────────────────────
+      let ammCount = 0;
+      try {
+        const amm = await client.request({
+          command: "account_amm",
+          account: address,
+          limit: 1,
+        });
+        ammCount = amm.result.amm?.length || 0;
+      } catch (error) {
+        toast.error(`Error fetching AMM count: ${error.message}`);
+      }
+
+      // ──────────────────────────────────────────────
+      // Build clean response
+      // ──────────────────────────────────────────────
+      json(200, {
+        success: true,
+        network,
+        address,
+        validatedLedger: ledgerIndex,
+        queriedAt: new Date().toISOString(),
+        account: {
+          address: acc.Account || address,
+          balanceXrp: acc.Balance ? dropsToXrp(acc.Balance) : "0",
+          sequence: acc.Sequence || 0,
+          ownerCount: acc.OwnerCount || 0,
+          flags: acc.Flags || 0,
+          flagsDecoded: {
+            defaultRipple: !!(acc.Flags & 0x00800000),
+            requireAuth: !!(acc.Flags & 0x00040000),
+            requireDestTag: !!(acc.Flags & 0x00020000),
+            freeze: !!(acc.Flags & 0x00400000),
+            noFreeze: !!(acc.Flags & 0x00200000),
+            globalFreeze: !!(acc.Flags & 0x00100000),
+            disallowXRP: !!(acc.Flags & 0x00080000),
+          },
+          regularKey: acc.RegularKey || null,
+          signerListCount: acc.SignerLists || 0,
+          domain: domain || null,
+          emailHash: acc.EmailHash || null,
+          transferRate: acc.TransferRate
+            ? (acc.TransferRate / 1_000_000_000).toFixed(9)
+            : null,
+          tickSize: acc.TickSize || null,
+          // Counts / summaries
+          trustLines,
+          issuedCurrencies,
+          ownedNFTs: nftCount,
+          activeOffers: offerCount,
+          ammPositions: ammCount,
+        },
+        recentTransactions: transactions,
+        server: {
+          url,
+          latencyMs: Date.now() - (globalThis.__startTime || Date.now()), // optional
+        },
+      });
+
+      await client.disconnect();
+      return;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`Node ${url} failed:`, err.message);
+      try {
+        await client.disconnect();
+      } catch (error) {
+        toast.error(`Error disconnecting from node ${url}: ${error.message}`);
+      }
     }
-
-    // Format response for your frontend
-    const accountData = result.result?.account_data || {};
-    const infoData = result.result || {};
-
-    json(200, {
-      account: {
-        account: infoData.account || address,
-        balance: (Number(accountData.Balance) / 1_000_000).toFixed(2) + " XRP",
-        sequence: accountData.Sequence || 0,
-        owner_count: accountData.OwnerCount || 0,
-      },
-      // Add more data as needed
-      raw: result.result,
-    });
-  } catch (error: any) {
-    console.error("Explorer API error:", error);
-    throw { status: 500 };
   }
+
+  // All nodes failed
+  console.error(`All nodes failed for ${address} on ${network}`, lastError);
+  throw error(
+    503,
+    "Temporarily unable to fetch account data — all nodes unreachable",
+  );
 };

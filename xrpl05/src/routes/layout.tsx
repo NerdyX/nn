@@ -60,11 +60,9 @@ export default component$(() => {
   return (
     <div class="flex flex-col min-h-screen">
       <Header />
-
       <main class="flex-1">
         <Slot />
       </main>
-
       <footer class="text-center font-extralight mb-1.5">
         © 2025 – Product of <a href="https://nrdxlab.com">{"{NRDX}"}Labs</a>.
         All rights reserved.

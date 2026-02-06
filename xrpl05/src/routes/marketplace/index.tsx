@@ -53,7 +53,7 @@ export default component$(() => {
   );
 
   return (
-    <div class="min-h-screen bg-white text-black pb-20">
+    <div class="min-h-screen bg-white text-black mt-24 pb-20">
       {/* Search */}
       <div class="max-w-7xl mx-auto px-6 mt-6 flex gap-4">
         <input

@@ -310,7 +310,9 @@ export default component$(() => {
 
           <div class="border-t border-dust_grey-300 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p class="text-dust_grey-400 text-sm font-light">
-              © 2024 {"{XRPL}"}OS. Built with sovereignty in mind.
+              © 2025 – Product of{" "}
+              <a href="https://nrdxlab.com">{"{NRDX}"}Labs</a>. All rights
+              reserved.
             </p>
             <div class="flex gap-6">
               <a

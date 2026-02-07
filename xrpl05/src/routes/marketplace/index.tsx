@@ -10,11 +10,30 @@ interface Nft {
   lastSale: string;
 }
 
+interface Token {
+  id: string;
+  symbol: string;
+  name: string;
+  totalSupply: string;
+  decimals: number;
+  description: string;
+  owner: string;
+  createdDate: string;
+}
+
 interface MintFormData {
   nftName: string;
   collectionName: string;
   description: string;
   royalty: string;
+}
+
+interface TokenFormData {
+  tokenName: string;
+  tokenSymbol: string;
+  totalSupply: string;
+  decimals: string;
+  description: string;
 }
 
 export default component$(() => {
@@ -35,9 +54,9 @@ export default component$(() => {
   const searchQuery = useSignal("");
   const currentPage = useSignal(1);
   const pageSize = 12;
-  const activeTab = useSignal<"explore" | "market" | "claim" | "mint" | "">(
-    "explore",
-  );
+  const activeTab = useSignal<
+    "explore" | "market" | "claim" | "mint" | "token"
+  >("explore");
   const selectedCollection = useSignal<string | null>(null);
   const priceRange = useSignal<[number, number]>([0, 100]);
   const claimableNfts = useSignal<Nft[]>(nfts.value.slice(0, 8));
@@ -50,6 +69,14 @@ export default component$(() => {
     royalty: "5",
   });
   const previewImage = useSignal<string>("");
+  const createdTokens = useSignal<Token[]>([]);
+  const tokenFormData = useSignal<TokenFormData>({
+    tokenName: "",
+    tokenSymbol: "",
+    totalSupply: "",
+    decimals: "6",
+    description: "",
+  });
 
   const filtered = nfts.value.filter((nft) => {
     const matchesSearch =
@@ -135,6 +162,19 @@ export default component$(() => {
             }}
           >
             Mint NFT
+          </button>
+          <button
+            class={`px-6 py-3 font-semibold transition-all duration-300 ${
+              activeTab.value === "token"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+            onClick$={() => {
+              activeTab.value = "token";
+              currentPage.value = 1;
+            }}
+          >
+            Create Token
           </button>
         </div>
 
@@ -982,6 +1022,263 @@ export default component$(() => {
             </div>
           </div>
         )}
+
+        {/* Token Tab */}
+        {activeTab.value === "token" && (
+          <div class="mt-8">
+            {/* Token Header */}
+            <div class="rounded-3xl backdrop-blur-xl bg-linear-to-br from-orange-50/60 via-white/40 to-amber-50/60 border border-white/50 shadow-2xl p-8 md:p-12 mb-8">
+              <h1 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
+                🪙 Create Your Token
+              </h1>
+              <p class="mt-4 text-gray-700 max-w-lg text-lg">
+                Launch your own custom token on the Xahau network. Set your
+                supply, decimals, and token properties to create your unique
+                digital asset.
+              </p>
+              <div class="flex flex-wrap gap-3 mt-6">
+                <Stat
+                  label="Tokens Created"
+                  value={createdTokens.value.length.toString()}
+                />
+                <Stat label="Creation Fee" value="10 XRP" />
+                <Stat label="Min Supply" value="1" />
+              </div>
+            </div>
+
+            {/* Token Form and Preview */}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Form Section */}
+              <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
+                <h2 class="text-2xl font-bold text-gray-900 mb-6">
+                  Token Details
+                </h2>
+
+                <div class="space-y-6">
+                  {/* Token Name */}
+                  <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">
+                      Token Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., My Custom Token"
+                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300"
+                      value={tokenFormData.value.tokenName}
+                      onInput$={(e) =>
+                        (tokenFormData.value.tokenName = (
+                          e.target as HTMLInputElement
+                        ).value)
+                      }
+                    />
+                  </div>
+
+                  {/* Token Symbol */}
+                  <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">
+                      Token Symbol
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., MCT"
+                      maxLength={10}
+                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300 uppercase"
+                      value={tokenFormData.value.tokenSymbol}
+                      onInput$={(e) =>
+                        (tokenFormData.value.tokenSymbol = (
+                          e.target as HTMLInputElement
+                        ).value.toUpperCase())
+                      }
+                    />
+                  </div>
+
+                  {/* Total Supply */}
+                  <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">
+                      Total Supply
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="e.g., 1000000"
+                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300"
+                      value={tokenFormData.value.totalSupply}
+                      onInput$={(e) =>
+                        (tokenFormData.value.totalSupply = (
+                          e.target as HTMLInputElement
+                        ).value)
+                      }
+                    />
+                  </div>
+
+                  {/* Decimals */}
+                  <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">
+                      Decimals: {tokenFormData.value.decimals}
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="18"
+                      value={tokenFormData.value.decimals}
+                      onInput$={(e) =>
+                        (tokenFormData.value.decimals = (
+                          e.target as HTMLInputElement
+                        ).value)
+                      }
+                      class="w-full h-2 bg-white/30 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <p class="text-xs text-gray-600 mt-2">
+                      Number of decimal places for your token
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label class="block text-sm font-semibold text-gray-900 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      placeholder="Describe your token..."
+                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300 resize-none h-24"
+                      value={tokenFormData.value.description}
+                      onInput$={(e) =>
+                        (tokenFormData.value.description = (
+                          e.target as HTMLTextAreaElement
+                        ).value)
+                      }
+                    />
+                  </div>
+
+                  {/* Create Token Button */}
+                  <button
+                    class="w-full mt-6 px-6 py-3 backdrop-blur-md bg-linear-to-r from-orange-500 to-amber-600 text-white rounded-xl hover:shadow-lg hover:from-orange-600 hover:to-amber-700 transition-all duration-300 font-semibold"
+                    onClick$={() => {
+                      if (
+                        tokenFormData.value.tokenName &&
+                        tokenFormData.value.tokenSymbol &&
+                        tokenFormData.value.totalSupply
+                      ) {
+                        const newToken: Token = {
+                          id: `TOKEN-${createdTokens.value.length + 1}`,
+                          symbol: tokenFormData.value.tokenSymbol,
+                          name: tokenFormData.value.tokenName,
+                          totalSupply: tokenFormData.value.totalSupply,
+                          decimals: parseInt(tokenFormData.value.decimals),
+                          description: tokenFormData.value.description,
+                          owner: "Your Wallet",
+                          createdDate: new Date().toLocaleDateString(),
+                        };
+                        createdTokens.value = [
+                          ...createdTokens.value,
+                          newToken,
+                        ];
+                        tokenFormData.value = {
+                          tokenName: "",
+                          tokenSymbol: "",
+                          totalSupply: "",
+                          decimals: "6",
+                          description: "",
+                        };
+                      }
+                    }}
+                  >
+                    🚀 Create Token
+                  </button>
+                </div>
+              </div>
+
+              {/* Preview Section */}
+              <div class="space-y-6">
+                <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
+                  <h2 class="text-2xl font-bold text-gray-900 mb-6">Preview</h2>
+
+                  {/* Preview Card */}
+                  <div class="rounded-2xl overflow-hidden backdrop-blur-md bg-white/40 border border-white/50 hover:shadow-2xl transition-all duration-300 p-6">
+                    <div class="flex items-center gap-4 mb-6">
+                      <div class="w-16 h-16 rounded-full bg-linear-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white text-2xl font-bold">
+                        {tokenFormData.value.tokenSymbol.charAt(0) || "T"}
+                      </div>
+                      <div>
+                        <h3 class="font-bold text-lg text-gray-900">
+                          {tokenFormData.value.tokenName || "Token Name"}
+                        </h3>
+                        <p class="text-sm text-orange-600 font-semibold">
+                          {tokenFormData.value.tokenSymbol || "SYMBOL"}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="space-y-3 bg-white/20 rounded-xl p-4 border border-white/30">
+                      <div>
+                        <p class="text-xs text-gray-600 font-semibold">
+                          Total Supply
+                        </p>
+                        <p class="text-sm text-gray-900 font-bold">
+                          {tokenFormData.value.totalSupply || "0"}{" "}
+                          {tokenFormData.value.tokenSymbol || "SYMBOL"}
+                        </p>
+                      </div>
+                      <div>
+                        <p class="text-xs text-gray-600 font-semibold">
+                          Decimals
+                        </p>
+                        <p class="text-sm text-gray-900 font-bold">
+                          {tokenFormData.value.decimals}
+                        </p>
+                      </div>
+                      <div>
+                        <p class="text-xs text-gray-600 font-semibold">
+                          Status
+                        </p>
+                        <p class="text-sm text-gray-900 font-bold">
+                          Ready to create
+                        </p>
+                      </div>
+                    </div>
+                    <p class="text-xs text-gray-700 mt-4 line-clamp-3">
+                      {tokenFormData.value.description ||
+                        "Your token description will appear here"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Created Tokens List */}
+                {createdTokens.value.length > 0 && (
+                  <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">
+                      Your Tokens ({createdTokens.value.length})
+                    </h2>
+                    <div class="space-y-3 max-h-96 overflow-y-auto">
+                      {createdTokens.value.map((token) => (
+                        <div
+                          key={token.id}
+                          class="flex items-center gap-3 p-4 rounded-xl bg-white/20 hover:bg-white/40 transition-all duration-200 border border-white/30"
+                        >
+                          <div class="w-10 h-10 rounded-full bg-linear-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                            {token.symbol.charAt(0)}
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="font-semibold text-sm text-gray-900 truncate">
+                              {token.name}
+                            </p>
+                            <p class="text-xs text-orange-600 font-medium">
+                              {token.symbol} • Supply: {token.totalSupply}
+                            </p>
+                          </div>
+                          <div class="text-right text-xs">
+                            <p class="text-gray-600 font-semibold">✓ Created</p>
+                            <p class="text-gray-500 text-xs">
+                              {token.createdDate}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* NFT Modal */}
@@ -1034,6 +1331,10 @@ export default component$(() => {
           </div>
         </div>
       )}
+      <footer class="text-center mt-36 -mb-10 font-extralight">
+        © 2025 – Product of <a href="https://nrdxlab.com">{"{NRDX}"}Labs</a>.
+        All rights reserved.
+      </footer>
     </div>
   );
 });

@@ -21,53 +21,37 @@ const data = [
 
 export default component$(() => {
   return (
-    <div class="bg-gradient-to-b from-slate-950 via-slate-900 to-white">
+    <div class="bg-linear-to-b from-carbon_black-500 via-carbon_black-600 to-alabaster_grey-500">
       {/* Hero Section */}
       <section class="relative w-full min-h-screen overflow-hidden flex items-center justify-center pt-20 pb-10">
         {/* Animated Background Elements */}
         <div class="absolute inset-0 overflow-hidden">
-          <div class="absolute -top-40 -right-40 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl animate-pulse"></div>
+          <div class="absolute -top-40 -right-40 w-80 h-80 bg-blazing_flame-500/20 rounded-full blur-3xl animate-pulse"></div>
           <div
-            class="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl animate-pulse"
+            class="absolute -bottom-40 -left-40 w-80 h-80 bg-blazing_flame-600/20 rounded-full blur-3xl animate-pulse"
             style={{ animationDelay: "1s" }}
           ></div>
           <div
-            class="absolute top-1/2 left-1/2 w-96 h-96 bg-indigo-400/10 rounded-full blur-3xl animate-pulse"
+            class="absolute top-1/2 left-1/2 w-96 h-96 bg-blazing_flame-500/10 rounded-full blur-3xl animate-pulse"
             style={{ animationDelay: "2s" }}
           ></div>
         </div>
 
         {/* Content */}
         <div class="relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div class="mb-6 inline-block">
-            <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 text-sm font-medium hover:bg-indigo-500/20 transition-colors duration-300">
-              <span class="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></span>
-              Next Generation DeFi
-            </span>
-          </div>
-
-          <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
+          <h1 class="lg:text-9xl md:text-7xl sm:text-7xl text-7xl font-extralight text-white-500 mb-6 leading-tight tracking-tight">
             {"{XRPL}"}OS
-            <span class="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-indigo-400 animate-pulse">
-              Multi-Ledger Operating System
-            </span>
           </h1>
+          <span class="block bg-clip-text text-black">
+            Multi-Ledger Operating System
+          </span>
 
-          <p class="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-8 leading-relaxed font-light">
+          <p class="text-lg sm:text-xl text-dust_grey-300 max-w-2xl mx-auto mb-8 leading-relaxed font-light">
             The sovereignty‑first web terminal that plugs you directly into the
             XRP Ledger and Xahau networks. Create, manage, and trade digital
             assets from a single, streamlined interface with enterprise‑grade
             security.
           </p>
-
-          <div class="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <button class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-indigo-500/50 transition-all duration-300 transform hover:scale-105">
-              Get Started
-            </button>
-            <button class="px-8 py-3 border border-indigo-500/50 text-indigo-300 font-semibold rounded-lg hover:bg-indigo-500/10 transition-all duration-300">
-              Learn More
-            </button>
-          </div>
 
           {/* Feature Cards Carousel */}
           <div class="mt-12 w-full">
@@ -117,12 +101,12 @@ export default component$(() => {
                 ].map((item, i) => (
                   <div
                     key={i}
-                    class="shrink-0 w-80 bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl p-6 border border-slate-700/50 hover:border-indigo-500/50 transition-all duration-300 backdrop-blur-sm hover:bg-gradient-to-br hover:from-slate-800/70 hover:to-slate-700/50 group"
+                    class="shrink-0 w-80 bg-linear-to-br from-carbon_black-600/50 to-carbon_black-700/30 rounded-xl p-6 border border-dust_grey-300/50 hover:border-blazing_flame-500/50 transition-all duration-300 backdrop-blur-sm hover:bg-linear-to-br hover:from-carbon_black-600/70 hover:to-carbon_black-700/50 group"
                   >
-                    <h4 class="text-white font-semibold text-base mb-3 group-hover:text-indigo-300 transition-colors">
+                    <h4 class="text-white-500 font-semibold text-base mb-3 group-hover:text-blazing_flame-500 transition-colors">
                       {item.title}
                     </h4>
-                    <p class="text-gray-400 text-sm leading-relaxed group-hover:text-gray-300 transition-colors">
+                    <p class="text-dust_grey-300 text-sm leading-relaxed group-hover:text-dust_grey-200 transition-colors">
                       {item.desc}
                     </p>
                   </div>
@@ -139,12 +123,12 @@ export default component$(() => {
                 ].map((item, i) => (
                   <div
                     key={`dup-${i}`}
-                    class="shrink-0 w-80 bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl p-6 border border-slate-700/50 hover:border-indigo-500/50 transition-all duration-300 backdrop-blur-sm hover:bg-gradient-to-br hover:from-slate-800/70 hover:to-slate-700/50 group"
+                    class="shrink-0 w-80 bg-linear-to-br from-carbon_black-600/50 to-carbon_black-700/30 rounded-xl p-6 border border-dust_grey-300/50 hover:border-blazing_flame-500/50 transition-all duration-300 backdrop-blur-sm hover:bg-linear-to-br hover:from-carbon_black-600/70 hover:to-carbon_black-700/50 group"
                   >
-                    <h4 class="text-white font-semibold text-base mb-3 group-hover:text-indigo-300 transition-colors">
+                    <h4 class="text-white-500 font-semibold text-base mb-3 group-hover:text-blazing_flame-500 transition-colors">
                       {item.title}
                     </h4>
-                    <p class="text-gray-400 text-sm leading-relaxed group-hover:text-gray-300 transition-colors">
+                    <p class="text-dust_grey-300 text-sm leading-relaxed group-hover:text-dust_grey-200 transition-colors">
                       {item.desc}
                     </p>
                   </div>
@@ -156,17 +140,17 @@ export default component$(() => {
       </section>
 
       {/* Three Networks Section */}
-      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8">
+      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-alabaster_grey-500">
         <div class="max-w-7xl mx-auto">
           <div class="text-center mb-16">
-            <h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 mb-4 leading-tight">
+            <h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-carbon_black-500 mb-4 leading-tight">
               Three Networks.
-              <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">
+              <span class="text-transparent bg-clip-text bg-linear-to-r from-blazing_flame-500 to-blazing_flame-600">
                 {" "}
                 One Platform.
               </span>
             </h2>
-            <p class="text-lg text-gray-600 max-w-2xl mx-auto font-light">
+            <p class="text-lg text-carbon_black-700 max-w-2xl mx-auto font-light">
               Seamlessly connect and manage assets across multiple blockchain
               networks
             </p>
@@ -176,18 +160,18 @@ export default component$(() => {
             {data.map((n, index) => (
               <div
                 key={index}
-                class="group relative bg-white rounded-2xl p-8 border border-gray-200 hover:border-indigo-300 transition-all duration-500 hover:shadow-xl hover:shadow-indigo-500/10 overflow-hidden"
+                class="group relative bg-white-500 rounded-2xl p-8 border border-dust_grey-400 hover:border-blazing_flame-500 transition-all duration-500 hover:shadow-xl hover:shadow-blazing_flame-500/10 overflow-hidden"
               >
-                <div class="absolute inset-0 bg-gradient-to-br from-indigo-600/0 to-blue-600/0 group-hover:from-indigo-600/5 group-hover:to-blue-600/5 transition-all duration-500"></div>
+                <div class="absolute inset-0 bg-linear-to-br from-blazing_flame-500/0 to-blazing_flame-600/0 group-hover:from-blazing_flame-500/5 group-hover:to-blazing_flame-600/5 transition-all duration-500"></div>
                 <div class="relative z-10">
-                  <h3 class="text-3xl font-bold text-slate-900 mb-4 group-hover:text-indigo-600 transition-colors">
+                  <h3 class="text-3xl font-bold text-carbon_black-500 mb-4 group-hover:text-blazing_flame-500 transition-colors">
                     {n.title}
                   </h3>
-                  <p class="text-gray-600 leading-relaxed text-base font-light">
+                  <p class="text-carbon_black-700 leading-relaxed text-base font-light">
                     {n.description}
                   </p>
                 </div>
-                <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-600 to-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
+                <div class="absolute bottom-0 left-0 w-full h-1 bg-linear-to-r from-blazing_flame-500 to-blazing_flame-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
               </div>
             ))}
           </div>
@@ -195,18 +179,18 @@ export default component$(() => {
       </section>
 
       {/* Philosophy Section */}
-      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-slate-50">
+      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-alabaster_grey-500 to-alabaster_grey-700">
         <div class="max-w-4xl mx-auto">
-          <div class="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-12 border border-slate-700/50 shadow-2xl">
+          <div class="bg-linear-to-br from-carbon_black-500 to-carbon_black-600 rounded-2xl p-12 border border-dust_grey-300/50 shadow-2xl">
             <div class="mb-8">
-              <span class="inline-block px-4 py-1 bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 text-sm font-semibold rounded-full mb-4">
+              <span class="inline-block px-4 py-1 bg-blazing_flame-500/20 border border-blazing_flame-500/50 text-blazing_flame-500 text-sm font-semibold rounded-full mb-4">
                 Our Philosophy
               </span>
             </div>
-            <h2 class="text-4xl sm:text-5xl font-bold text-white mb-6 leading-tight">
+            <h2 class="text-4xl sm:text-5xl font-bold text-white-500 mb-6 leading-tight">
               Designed for Sovereignty
             </h2>
-            <p class="text-gray-300 text-lg leading-relaxed font-light">
+            <p class="text-dust_grey-300 text-lg leading-relaxed font-light">
               Every action in {`{XRPL}`}OS is explicit and intentional.
               Transactions are grouped by purpose—Create, Set, Claim, Deposit,
               Cancel—so users understand exactly what they are signing before
@@ -224,20 +208,20 @@ export default component$(() => {
       </section>
 
       {/* Footer */}
-      <footer class="bg-slate-950 text-gray-400 border-t border-slate-800">
+      <footer class="bg-carbon_black-500 text-dust_grey-300 border-t border-dust_grey-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-12 mb-12">
             <div class="lg:col-span-2">
               <div class="mb-4">
                 <a
                   href="/"
-                  class="text-2xl font-bold text-white hover:text-indigo-400 transition-colors"
+                  class="text-2xl font-bold text-white-500 hover:text-blazing_flame-500 transition-colors"
                   aria-label="logo"
                 >
                   {"{XRPL}"}OS
                 </a>
               </div>
-              <p class="text-gray-500 mb-6 text-sm leading-relaxed font-light">
+              <p class="text-dust_grey-400 mb-6 text-sm leading-relaxed font-light">
                 The decentralized operating system for creating, managing, and
                 trading digital assets across XRP Ledger, Flare, and Xahau
                 networks with security and sovereignty at its core.
@@ -265,7 +249,7 @@ export default component$(() => {
                     key={social.name}
                     href="#"
                     target="_blank"
-                    class="p-2 rounded-lg hover:bg-indigo-500/20 text-gray-400 hover:text-indigo-400 transition-all duration-300 group"
+                    class="p-2 rounded-lg hover:bg-blazing_flame-500/20 text-dust_grey-300 hover:text-blazing_flame-500 transition-all duration-300 group"
                     aria-label={social.name}
                   >
                     <svg
@@ -306,7 +290,7 @@ export default component$(() => {
               },
             ].map((section) => (
               <div key={section.title}>
-                <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">
+                <h3 class="text-white-500 font-semibold text-sm uppercase tracking-wider mb-4">
                   {section.title}
                 </h3>
                 <nav class="flex flex-col gap-3">
@@ -314,7 +298,7 @@ export default component$(() => {
                     <a
                       key={link}
                       href="#"
-                      class="text-gray-500 hover:text-indigo-400 transition-colors text-sm font-light"
+                      class="text-dust_grey-400 hover:text-blazing_flame-500 transition-colors text-sm font-light"
                     >
                       {link}
                     </a>
@@ -324,20 +308,20 @@ export default component$(() => {
             ))}
           </div>
 
-          <div class="border-t border-slate-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p class="text-gray-500 text-sm font-light">
+          <div class="border-t border-dust_grey-300 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p class="text-dust_grey-400 text-sm font-light">
               © 2024 {"{XRPL}"}OS. Built with sovereignty in mind.
             </p>
             <div class="flex gap-6">
               <a
                 href="#"
-                class="text-gray-500 hover:text-indigo-400 text-sm transition-colors"
+                class="text-dust_grey-400 hover:text-blazing_flame-500 text-sm transition-colors"
               >
                 Status
               </a>
               <a
                 href="#"
-                class="text-gray-500 hover:text-indigo-400 text-sm transition-colors"
+                class="text-dust_grey-400 hover:text-blazing_flame-500 text-sm transition-colors"
               >
                 Changelog
               </a>

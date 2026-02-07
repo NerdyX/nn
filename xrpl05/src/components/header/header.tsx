@@ -49,7 +49,7 @@ const minClass = (min?: NavItem["min"]) => {
 export const Header = component$(() => {
   const session = useXamanSession();
   const nav = useNavigate();
-  const { activeNetwork } = useContext(NetworkContext);
+  useContext(NetworkContext);
 
   const mobileOpen = useSignal(false);
   const modalOpen = useSignal(false);
@@ -208,32 +208,6 @@ export const Header = component$(() => {
                 <NetworkToggle />
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ---------------- WALLET MODAL ---------------- */}
-      {mobileOpen.value && (
-        <div class="fixed inset-x-4 top-20 z-40 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/10 shadow-xl p-4 md:hidden">
-          <div class="flex flex-col gap-2">
-            {visibleNavItems.map((item) =>
-              item.href ? (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  onClick$={() => (mobileOpen.value = false)}
-                  class="rounded-xl px-4 py-3 text-white/90 hover:bg-white/10 transition"
-                >
-                  {item.label}
-                </Link>
-              ) : null,
-            )}
-
-            {pathname !== "/" && (
-              <div class="pt-3 border-t border-white/10">
-                <NetworkToggle />
-              </div>
-            )}
 
             {/* Connect / Disconnect Button */}
             <div class="pt-3 border-t border-white/10">
@@ -251,6 +225,82 @@ export const Header = component$(() => {
                 >
                   Connect Wallet
                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- WALLET MODAL ---------------- */}
+      {modalOpen.value && (
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div class="rounded-2xl bg-black/90 backdrop-blur-xl border border-white/10 shadow-xl p-6 max-w-sm w-full mx-4">
+            <div class="flex flex-col gap-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-xl font-semibold text-white">Connect Wallet</h2>
+                <button
+                  onClick$={closeModal}
+                  class="text-white/50 hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {!selectedWallet.value ? (
+                <div class="flex flex-col gap-2">
+                  {(
+                    ["xaman", "ledger", "gem", "walletconnect"] as WalletType[]
+                  ).map((wallet) => (
+                    <button
+                      key={wallet}
+                      onClick$={() => selectWallet(wallet)}
+                      class="rounded-xl px-4 py-3 text-white/90 hover:bg-white/10 transition capitalize border border-white/10"
+                    >
+                      {wallet}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div class="flex flex-col gap-4">
+                  <button
+                    onClick$={() => {
+                      selectedWallet.value = null;
+                      qrCode.value = null;
+                      pollError.value = null;
+                      connecting.value = false;
+                    }}
+                    class="text-white/70 hover:text-white transition text-sm"
+                  >
+                    ← Back
+                  </button>
+
+                  {connecting.value && (
+                    <div class="flex flex-col items-center gap-3 py-6">
+                      <Spinner />
+                      <p class="text-white/70 text-sm">
+                        Connecting to {selectedWallet.value}...
+                      </p>
+                    </div>
+                  )}
+
+                  {qrCode.value && (
+                    <div class="flex justify-center">
+                      <img
+                        src={qrCode.value}
+                        height="100"
+                        width="100"
+                        alt="QR Code"
+                        class="w-48 h-48"
+                      />
+                    </div>
+                  )}
+
+                  {pollError.value && (
+                    <div class="rounded-lg bg-red-500/20 border border-red-500/50 p-3">
+                      <p class="text-red-200 text-sm">{pollError.value}</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

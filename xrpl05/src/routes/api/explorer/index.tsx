@@ -1,7 +1,5 @@
-// src/routes/api/explorer/index.tsx
 import { RequestHandler } from "@builder.io/qwik-city";
 import { Client, dropsToXrp } from "xrpl";
-import { toast } from "react-toastify";
 
 const NODE_TIMEOUT_MS = 8000;
 
@@ -46,6 +44,7 @@ export const onGet: RequestHandler = async ({
 
   for (const url of urls) {
     const client = new Client(url);
+    let domain: string | null = null;
 
     try {
       // Connect with timeout
@@ -72,12 +71,11 @@ export const onGet: RequestHandler = async ({
       const ledgerIndex = accountInfo.result.ledger_index;
 
       // Decode domain if present
-      let domain = null;
       if (acc.Domain) {
         try {
           domain = Buffer.from(acc.Domain, "hex").toString("utf8");
-        } catch (error) {
-          toast.error(`Error decoding domain: ${error.message}`);
+        } catch {
+          domain = null;
         }
       }
 
@@ -95,8 +93,8 @@ export const onGet: RequestHandler = async ({
         trustLines = lines.result.lines?.length || 0;
         issuedCurrencies =
           lines.result.lines?.filter((l: any) => l.limit_peer > 0)?.length || 0;
-      } catch (error) {
-        toast.error(`Error fetching trust lines: ${error.message}`);
+      } catch {
+        domain = null;
       }
 
       // ──────────────────────────────────────────────
@@ -120,7 +118,7 @@ export const onGet: RequestHandler = async ({
           if (tx.Amount) {
             amountStr =
               typeof tx.Amount === "string"
-                ? dropsToXrp(tx.Amount)
+                ? String(dropsToXrp(tx.Amount))
                 : `${tx.Amount.value} ${tx.Amount.currency}${tx.Amount.issuer ? ` (${tx.Amount.issuer.slice(0, 8)}…)` : ""}`;
           }
 
@@ -129,8 +127,8 @@ export const onGet: RequestHandler = async ({
             type: tx.TransactionType,
             from: tx.Account,
             to: tx.Destination,
-            amount: amountStr || tx.Amount?.value || null,
-            fee: tx.Fee ? dropsToXrp(tx.Fee) : null,
+            amount: amountStr ?? tx.Amount?.value ?? null,
+            fee: tx.Fee ? String(dropsToXrp(tx.Fee)) : null,
             date: tx.date
               ? new Date((tx.date + 946684800) * 1000).toISOString()
               : null,
@@ -141,8 +139,8 @@ export const onGet: RequestHandler = async ({
             // Add more if needed: memos, destinationTag, etc.
           };
         });
-      } catch (error) {
-        toast.error(`Error fetching transaction history: ${error.message}`);
+      } catch {
+        domain = null;
       }
 
       // ──────────────────────────────────────────────
@@ -156,8 +154,8 @@ export const onGet: RequestHandler = async ({
           limit: 1, // we only need count
         });
         nftCount = nfts.result.account_nfts?.length || 0;
-      } catch (error) {
-        toast.error(`Error fetching NFT count: ${error.message}`);
+      } catch {
+        domain = null;
       }
 
       // ──────────────────────────────────────────────
@@ -171,8 +169,8 @@ export const onGet: RequestHandler = async ({
           limit: 1,
         });
         offerCount = offers.result.offers?.length || 0;
-      } catch (error) {
-        toast.error(`Error fetching offer count: ${error.message}`);
+      } catch {
+        domain = null;
       }
 
       // ──────────────────────────────────────────────
@@ -184,10 +182,10 @@ export const onGet: RequestHandler = async ({
           command: "account_amm",
           account: address,
           limit: 1,
-        });
-        ammCount = amm.result.amm?.length || 0;
-      } catch (error) {
-        toast.error(`Error fetching AMM count: ${error.message}`);
+        } as any);
+        ammCount = (amm.result as any).amm?.length || 0;
+      } catch {
+        domain = null;
       }
 
       // ──────────────────────────────────────────────
@@ -201,7 +199,7 @@ export const onGet: RequestHandler = async ({
         queriedAt: new Date().toISOString(),
         account: {
           address: acc.Account || address,
-          balanceXrp: acc.Balance ? dropsToXrp(acc.Balance) : "0",
+          balanceXrp: acc.Balance ? String(dropsToXrp(acc.Balance)) : "0",
           sequence: acc.Sequence || 0,
           ownerCount: acc.OwnerCount || 0,
           flags: acc.Flags || 0,
@@ -215,7 +213,7 @@ export const onGet: RequestHandler = async ({
             disallowXRP: !!(acc.Flags & 0x00080000),
           },
           regularKey: acc.RegularKey || null,
-          signerListCount: acc.SignerLists || 0,
+          signerListCount: (acc as any).SignerLists?.length || 0,
           domain: domain || null,
           emailHash: acc.EmailHash || null,
           transferRate: acc.TransferRate
@@ -232,7 +230,8 @@ export const onGet: RequestHandler = async ({
         recentTransactions: transactions,
         server: {
           url,
-          latencyMs: Date.now() - (globalThis.__startTime || Date.now()), // optional
+          latencyMs:
+            Date.now() - ((globalThis as any).__startTime || Date.now()), // optional
         },
       });
 
@@ -243,8 +242,8 @@ export const onGet: RequestHandler = async ({
       console.warn(`Node ${url} failed:`, err.message);
       try {
         await client.disconnect();
-      } catch (error) {
-        toast.error(`Error disconnecting from node ${url}: ${error.message}`);
+      } catch {
+        // ignore
       }
     }
   }

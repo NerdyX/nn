@@ -1,5 +1,5 @@
 import { component$ } from "@builder.io/qwik";
-
+type Nft = /*unresolved*/ any;
 export const HeroFeatured = component$(({ nft }: { nft: Nft }) => (
   <div class="hero-content">
     <div>

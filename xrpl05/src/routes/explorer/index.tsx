@@ -34,19 +34,14 @@ const NETWORKS = [
 
 type NetworkKey = (typeof NETWORKS)[number]["key"];
 
-const ENDPOINTS = {
-  xrpl: ["wss://xrplcluster.com", "wss://s1.ripple.com", "wss://xrpl.ws"],
-  xahau: ["wss://xahau.network", "wss://rpc.xahau.network"],
-};
-
 // ──────────────────────────────────────────────
 // Types (from your original + improvements)
 // ──────────────────────────────────────────────
 
 interface TxEvent {
-  hash: string;
-  TransactionType: string;
-  Account: string;
+  hash?: string;
+  TransactionType?: string;
+  Account?: string;
   date?: number;
   amount?: string; // human readable
   destination?: string;
@@ -54,19 +49,17 @@ interface TxEvent {
 
 interface AccountInfo {
   account: string;
-  balance: string;
-  sequence: number;
-  owner_count: number;
-}
-
-async function connectFast(urls: string[]) {
-  return Promise.any(
-    urls.map(async (url) => {
-      const c = new Client(url);
-      await c.connect();
-      return c;
-    }),
-  );
+  balance?: string;
+  balanceXrp?: string;
+  sequence?: number;
+  owner_count?: number;
+  ownerCount?: number;
+  flagsDecoded?: Record<string, boolean>;
+  trustLines?: number;
+  issuedCurrencies?: number;
+  ownedNFTs?: number;
+  activeOffers?: number;
+  ammPositions?: number;
 }
 
 // ──────────────────────────────────────────────
@@ -148,7 +141,9 @@ export default component$(() => {
     if (client.value) {
       try {
         await client.value.disconnect();
-      } catch {}
+      } catch (e) {
+        console.warn("Error disconnecting previous client", e);
+      }
       client.value = null;
     }
 
@@ -167,18 +162,23 @@ export default component$(() => {
         streams: ["ledger", "transactions"], // validated tx only; use "transactions_proposed" if you want unconfirmed
       });
 
-      status.value = "connected";
-
+      // Try to fetch server info (non-fatal)
       newClient
         .request({ command: "server_info" })
         .then((info) => {
-          loadFee.value = info.result.info.load_factor ?? null;
+          loadFee.value = info.result?.info?.load_factor ?? null;
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.warn("server_info fetch failed", err);
+        });
 
       // Initial server info
-      const info = await newClient.request({ command: "server_info" });
-      loadFee.value = info.result.info.load_factor ?? null;
+      try {
+        const info = await newClient.request({ command: "server_info" });
+        loadFee.value = info.result?.info?.load_factor ?? null;
+      } catch (e) {
+        console.warn("server_info initial fetch failed", e);
+      }
 
       client.value = noSerialize(newClient);
 
@@ -186,7 +186,8 @@ export default component$(() => {
       newClient.on("ledgerClosed", (msg: LedgerStream) => {
         const now = Date.now();
         if (lastLedgerClose.value) {
-          const interval = (now - lastLedgerClose.value) / 0.001;
+          // convert ms -> seconds
+          const interval = (now - lastLedgerClose.value) / 1000;
           ledgerIntervals.value = [
             interval,
             ...ledgerIntervals.value.slice(0, 19),
@@ -213,18 +214,45 @@ export default component$(() => {
       newClient.on("transaction", (msg: TransactionStream) => {
         if (!msg.validated) return;
 
-        const tx = msg.transaction;
+        const tx = (msg.transaction as any) ?? {};
+        if (!tx) return;
+
         let amountStr: string | undefined;
-        if (tx.Amount) {
-          amountStr =
-            typeof tx.Amount === "string"
-              ? dropsToXrp(tx.Amount)
-              : `${tx.Amount.value} ${tx.Amount.currency}`;
+
+        // Prefer delivered_amount from meta (for partial payments), fall back to tx.Amount
+        const deliveredAmount = (msg as any).meta?.delivered_amount;
+        const displayAmount = deliveredAmount ?? tx.Amount;
+
+        if (displayAmount !== undefined && displayAmount !== null) {
+          if (typeof displayAmount === "string") {
+            // Native XRP amount in drops -> convert to XRP and append currency label
+            try {
+              amountStr = `${dropsToXrp(displayAmount)} XRP`;
+            } catch {
+              const dropsNum = Number(displayAmount);
+              if (!Number.isNaN(dropsNum)) {
+                amountStr = `${dropsNum / 1_000_000} XRP`;
+              }
+            }
+          } else if (
+            typeof displayAmount === "object" &&
+            displayAmount !== null &&
+            "value" in displayAmount
+          ) {
+            // Issued currency
+            const currency = displayAmount.currency ?? "XRP";
+            amountStr = `${displayAmount.value} ${currency}`;
+          }
         }
+
+        const computedHash =
+          (msg as any).hash ??
+          (tx && (tx.hash ?? tx.TransactionHash)) ??
+          undefined;
 
         txs.value = [
           {
-            hash: msg.hash,
+            hash: computedHash,
             TransactionType: tx.TransactionType,
             Account: tx.Account,
             date: tx.date,
@@ -245,10 +273,13 @@ export default component$(() => {
     }
 
     cleanup(async () => {
-      if (client.value)
+      if (client.value) {
         try {
           await client.value.disconnect();
-        } catch {}
+        } catch (e) {
+          console.warn("Error during cleanup disconnect", e);
+        }
+      }
     });
   });
 
@@ -273,18 +304,19 @@ export default component$(() => {
       } else if (queryType.value === "tx") {
         req = { command: "tx", transaction: input };
       } else if (queryType.value === "ledger") {
+        const isHash = Boolean(input.match(/^[A-Fa-f0-9]{64}$/));
         req = {
           command: "ledger",
-          ledger_hash: input.match(/^[A-F0-9]{64}$/) ? input : undefined,
-          ledger_index: input.match(/^[A-F0-9]{64}$/) ? undefined : input,
+          ledger_hash: isHash ? input : undefined,
+          ledger_index: isHash ? undefined : input,
           transactions: true,
         };
       }
 
-      const resp = await client.value.request(req);
+      const resp = await (client.value as any).request(req);
       detailedResult.value = resp.result;
     } catch (err: any) {
-      queryError.value = err.message || "Query failed";
+      queryError.value = err?.message ?? "Query failed";
     }
   });
 
@@ -348,7 +380,7 @@ export default component$(() => {
         </div>
 
         <select
-          class="px-5 py-4 rounded-xl border-2 border-slate-200 bg-white text-slate-900 min-w-[180px]"
+          class="px-5 py-4 rounded-xl border-2 border-slate-200 bg-white text-slate-900 min-w-45"
           value={queryType.value}
           onChange$={(e) =>
             (queryType.value = (e.target as HTMLSelectElement).value as any)
@@ -415,7 +447,7 @@ export default component$(() => {
         <div class="flex mt-1.5 overflow-x-auto gap-6 pb-4">
           {ledgers.value.map((ledger) => (
             <div
-              key={ledger.ledger_hash}
+              key={ledger.ledger_hash ?? ledger.ledger_index}
               class="border border-slate-200 bg-white rounded-lg p-4 min-w-55
               shrink-0 shadow-sm"
             >
@@ -431,9 +463,9 @@ export default component$(() => {
                 TXN COUNT: <span class="font-medium">{ledger.txn_count}</span>
               </div>
               <div class="grid grid-cols-6 gap-1 mt-3">
-                {txs.value.slice(0, 36).map((tx) => (
+                {txs.value.slice(0, 36).map((tx, i) => (
                   <span
-                    key={tx.hash}
+                    key={tx.hash ?? `tx-${i}`}
                     title={tx.TransactionType}
                     class={`w-3 h-3 rounded-full ${txColor(tx.TransactionType)}`}
                   />
@@ -468,13 +500,17 @@ export default component$(() => {
                   <div class="p-5 bg-slate-50 rounded-xl">
                     <h3 class="font-semibold mb-3">Basic</h3>
                     <p>
-                      <strong>Balance:</strong> {data.account.balanceXrp}
+                      <strong>Balance:</strong>{" "}
+                      {data.account.balanceXrp ?? data.account.balance ?? "--"}
                     </p>
                     <p>
-                      <strong>Sequence:</strong> {data.account.sequence}
+                      <strong>Sequence:</strong> {data.account.sequence ?? "--"}
                     </p>
                     <p>
-                      <strong>Owner Count:</strong> {data.account.ownerCount}
+                      <strong>Owner Count:</strong>{" "}
+                      {data.account.ownerCount ??
+                        data.account.owner_count ??
+                        "--"}
                     </p>
                   </div>
 
@@ -482,25 +518,26 @@ export default component$(() => {
                   <div class="p-5 bg-slate-50 rounded-xl">
                     <h3 class="font-semibold mb-3">Flags</h3>
                     <ul class="text-sm space-y-1">
-                      {Object.entries(data.account.flagsDecoded).map(
-                        ([key, val]) =>
-                          val && (
-                            <li key={key}>
-                              ✓ {key.replace(/([A-Z])/g, " $1").trim()}
-                            </li>
-                          ),
-                      )}
+                      {Object.entries(data.account.flagsDecoded ?? {})
+                        .filter(([, val]) => Boolean(val))
+                        .map(([key]) => (
+                          <li key={key}>
+                            ✓ {key.replace(/([A-Z])/g, " $1").trim()}
+                          </li>
+                        ))}
                     </ul>
                   </div>
 
                   {/* Assets / Counts */}
                   <div class="p-5 bg-slate-50 rounded-xl">
                     <h3 class="font-semibold mb-3">Assets & Activity</h3>
-                    <p>Trust Lines: {data.account.trustLines}</p>
-                    <p>Issued Currencies: {data.account.issuedCurrencies}</p>
-                    <p>Owned NFTs: {data.account.ownedNFTs}</p>
-                    <p>Active Offers: {data.account.activeOffers}</p>
-                    <p>AMM Positions: {data.account.ammPositions}</p>
+                    <p>Trust Lines: {data.account.trustLines ?? 0}</p>
+                    <p>
+                      Issued Currencies: {data.account.issuedCurrencies ?? 0}
+                    </p>
+                    <p>Owned NFTs: {data.account.ownedNFTs ?? 0}</p>
+                    <p>Active Offers: {data.account.activeOffers ?? 0}</p>
+                    <p>AMM Positions: {data.account.ammPositions ?? 0}</p>
                   </div>
                 </div>
               </section>
@@ -510,8 +547,11 @@ export default component$(() => {
               <section class="rounded border bg-white p-6 shadow-sm">
                 <h2 class="text-lg font-semibold mb-2">Recent Transactions</h2>
                 <ul class="text-sm space-y-2">
-                  {data.transactions.map((tx) => (
-                    <li key={tx.hash} class="rounded bg-gray-50 px-3 py-2">
+                  {data.transactions.map((tx, idx) => (
+                    <li
+                      key={tx.hash ?? `tx-${idx}`}
+                      class="rounded bg-gray-50 px-3 py-2"
+                    >
                       <div class="flex justify-between">
                         <span>{tx.TransactionType}</span>
                         <span class="text-gray-500">

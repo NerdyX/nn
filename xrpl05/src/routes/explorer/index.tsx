@@ -8,10 +8,12 @@ import {
   noSerialize,
   type NoSerialize,
 } from "@builder.io/qwik";
-
+//import XrplGlobe from "~/components/ui/XrplGlobe";
+//import XrplTransactions from "~/components/ui/XrplTransactions";
 import { Client, dropsToXrp } from "xrpl";
 
 import type { LedgerStream, TransactionStream } from "xrpl";
+import XrplLiveFeed from "~/components/ui/XrplLiveFeed";
 
 // ──────────────────────────────────────────────
 // Config
@@ -1194,81 +1196,7 @@ export default component$(() => {
                 </div>
               </div>
             </div>
-            <div class="rounded-xl border border-gray-200 bg-linear-to-br from-gray-50 to-gray-100 p-8">
-              <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                Live DEX Trades
-              </h2>
-              <p class="text-gray-600 text-sm mb-6">
-                Real-time decentralized exchange activity
-              </p>
-
-              {/* Bento Box Style Grid */}
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {dexTrades.value.length > 0 ? (
-                  dexTrades.value.slice(0, 12).map((trade, idx) => (
-                    <div
-                      key={`${trade.account}-${idx}`}
-                      class={`p-5 rounded-lg bg-white border border-gray-200 hover:border-gray-300 transition-all ${
-                        idx === 0 ? "lg:col-span-2 lg:row-span-2" : ""
-                      }`}
-                    >
-                      <div class="flex justify-between items-start mb-3">
-                        <div>
-                          <div class="font-mono text-sm font-bold text-cyan-600">
-                            {trade.account?.slice(0, 10)}...
-                          </div>
-                          <div class="text-xs text-gray-600 mt-1">
-                            {trade.transactionType}
-                          </div>
-                        </div>
-                        <span class="text-xs font-semibold px-2 py-1 rounded bg-green-100 text-green-700">
-                          +{trade.change24h.toFixed(1)}%
-                        </span>
-                      </div>
-
-                      <div class={idx === 0 ? "space-y-4" : "space-y-2"}>
-                        <div>
-                          <div
-                            class={`text-gray-600 text-xs ${
-                              idx === 0 ? "" : "text-xs"
-                            }`}
-                          >
-                            PRICE
-                          </div>
-                          <div
-                            class={`font-bold font-mono text-cyan-600 ${
-                              idx === 0 ? "text-2xl" : "text-lg"
-                            }`}
-                          >
-                            {trade.price.toFixed(6)} XRP
-                          </div>
-                        </div>
-                        <div>
-                          <div class="text-gray-600 text-xs">VOLUME</div>
-                          <div
-                            class={`font-bold font-mono text-gray-900 ${
-                              idx === 0 ? "text-xl" : "text-sm"
-                            }`}
-                          >
-                            {trade.volume.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="mt-4 pt-4 border-t border-gray-200">
-                        <div class="text-xs text-gray-500">
-                          {new Date(trade.timestamp).toLocaleTimeString()}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div class="col-span-full text-center py-12 text-gray-500">
-                    Waiting for DEX trades...
-                  </div>
-                )}
-              </div>
-            </div>
+            <XrplLiveFeed />
           </div>
         )}
       </div>

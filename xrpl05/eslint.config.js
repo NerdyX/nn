@@ -67,8 +67,14 @@ export default tseslint.config(
   },
   {
     rules: {
+      // your override
       "@typescript-eslint/no-explicit-any": "off",
-      "preserve-caught-error": "error",
+
+      // hard-disable the problematic rule, whatever plugin is trying to define it
+      "@eslint-community/eslint-plugin-eslint-comments/preserve-caught-error":
+        "off",
+      "@typescript-eslint/preserve-caught-error": "off",
+      "preserve-caught-error": "off",
     },
   },
 );

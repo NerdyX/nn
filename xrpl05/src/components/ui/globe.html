@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+      }
+      #globeViz {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+    <script src="//cdn.jsdelivr.net/npm/globe.gl"></script>
+  </head>
+  <body>
+    <div id="globeViz"></div>
+
+    <script type="module">
+      import {
+        MeshLambertMaterial,
+        DoubleSide,
+      } from "https://esm.sh/three@0.167.1";
+      import * as topojson from "https://esm.sh/topojson-client@3.1.0";
+
+      const world = new Globe(document.getElementById("globeViz"))
+        .backgroundColor("rgba(0,0,0,0)")
+        .showGlobe(false)
+        .showAtmosphere(false);
+
+      // Load land polygons (your first code)
+      fetch("//cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json")
+        .then((res) => res.json())
+        .then((land) => {
+          const landData = topojson.feature(land, land.objects.land).features;
+          world
+            .polygonsData(landData)
+            .polygonCapMaterial(
+              new MeshLambertMaterial({
+                color: "darkslategrey",
+                side: DoubleSide,
+              }),
+            )
+            .polygonSideColor(() => "rgba(0,0,0,0)");
+        });
+
+      // XRPL WebSocket setup for live validated transactions [web:11][web:13]
+      const ws = new WebSocket("wss://s1.ripple.com:51234"); // Public XRPL mainnet WS endpoint [web:11]
+      let arcsData = []; // Store arcs
+
+      ws.onopen = () => {
+        console.log("Connected to XRPL");
+        // Subscribe to validated transactions stream [web:13]
+        ws.send(
+          JSON.stringify({
+            id: "subscribe_tx",
+            command: "subscribe",
+            streams: ["transactions"],
+          }),
+        );
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "transaction" && msg.validated) {
+          // Only validated txns [web:12]
+          const tx = msg.transaction || msg.tx_json;
+          if (tx && tx.TransactionType === "Payment") {
+            // Focus on Payments for demo
+            addArcFromTx(tx);
+          }
+        }
+      };
+
+      ws.onerror = (err) => console.error("WS error:", err);
+      ws.onclose = () => console.log("WS closed");
+
+      // Function to create arc from transaction data
+      function addArcFromTx(tx) {
+        // Extract Account (sender) and Destination coords via simple hash-based geo (demo)
+        // In prod, use IP geolocation API or account country data
+        const startLng =
+          (parseInt(tx.Account.slice(0, 8), 16) / 0xffffffff) * 360 - 180;
+        const startLat =
+          (parseInt(tx.Account.slice(8, 16), 16) / 0xffffffff) * 180 - 90;
+        const endLng =
+          (parseInt(tx.Destination?.slice(0, 8) || "0", 16) / 0xffffffff) *
+            360 -
+          180;
+        const endLat =
+          (parseInt(tx.Destination?.slice(8, 16) || "0", 16) / 0xffffffff) *
+            180 -
+          90;
+
+        const arc = {
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+          color: [
+            ["#00ffff", "#ff00ff", "#ffff00", "#00ff00"][
+              Math.floor(Math.random() * 4)
+            ],
+            ["#00ffff", "#ff00ff", "#ffff00", "#00ff00"][
+              Math.floor(Math.random() * 4)
+            ],
+          ],
+          // Size based on amount if XRP Payment
+          dashLength:
+            tx.Amount && typeof tx.Amount === "string"
+              ? Math.min((parseInt(tx.Amount) / 1e6) * 0.1, 5) + 0.5
+              : Math.random() * 3 + 0.5,
+          dashGap: 0.2,
+          dashAnimateTime: () => Math.random() * 4000 + 500,
+        };
+
+        arcsData.push(arc);
+        if (arcsData.length > 50) arcsData.shift(); // Limit arcs for perf
+        world.arcsData(arcsData);
+      }
+
+      // Initial random arcs for demo
+      const N = 10;
+      for (let i = 0; i < N; i++) {
+        arcsData.push({
+          startLat: (Math.random() - 0.5) * 180,
+          startLng: (Math.random() - 0.5) * 360,
+          endLat: (Math.random() - 0.5) * 180,
+          endLng: (Math.random() - 0.5) * 360,
+          color: [
+            ["#00ffff", "#ff00ff", "#ffff00", "#00ff00"][
+              Math.floor(Math.random() * 4)
+            ],
+            ["#00ffff", "#ff00ff", "#ffff00", "#00ff00"][
+              Math.floor(Math.random() * 4)
+            ],
+          ],
+          dashLength: Math.random() * 3 + 0.5,
+          dashGap: 0.2,
+          dashAnimateTime: () => Math.random() * 4000 + 500,
+        });
+      }
+      world.arcsData(arcsData);
+    </script>
+  </body>
+</html>

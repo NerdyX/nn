@@ -7,7 +7,7 @@ interface Account {
   network: "xrpl" | "xahau";
 }
 
-export default component$(() => {
+export const AccountPage = component$(() => {
   const loading = useSignal(true);
   const accounts = useSignal<Account[]>([]);
 

@@ -1,7 +1,10 @@
-// XrplTransactions.tsx - SIMPLE WebSocket that WORKS
+// XrplTransactions.tsx - Live WebSocket feed using shared NetworkContext
 import { component$, useVisibleTask$, useStore } from "@builder.io/qwik";
+import { useNetworkContext, NETWORK_CONFIG } from "~/context/network-context";
 
 export default component$(() => {
+  const { activeNetwork, wsUrl } = useNetworkContext();
+
   const txs = useStore<
     {
       hash: string;
@@ -12,11 +15,20 @@ export default component$(() => {
     }[]
   >([]);
 
-  useVisibleTask$(() => {
-    const ws = new WebSocket("wss://s1.ripple.com:51234");
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(({ track, cleanup }) => {
+    // Track the shared wsUrl so we reconnect when the user toggles network
+    const currentWsUrl = track(() => wsUrl.value);
+    const currentNetwork = track(() => activeNetwork.value);
+    const nativeCurrency = NETWORK_CONFIG[currentNetwork].nativeCurrency;
+
+    // Clear previous transactions on network switch
+    txs.length = 0;
+
+    const ws = new WebSocket(currentWsUrl);
 
     ws.onopen = () => {
-      console.log("✅ Connected");
+      console.log(`✅ Connected to ${currentNetwork} (${currentWsUrl})`);
       ws.send(
         JSON.stringify({
           id: 1,
@@ -37,8 +49,8 @@ export default component$(() => {
           txs.unshift({
             hash: tx.hash?.slice(0, 16) + "..." || "N/A",
             amount: tx.Amount
-              ? `${(parseInt(tx.Amount) / 1_000_000).toFixed(2)} XRP`
-              : "0 XRP",
+              ? `${(parseInt(tx.Amount) / 1_000_000).toFixed(2)} ${nativeCurrency}`
+              : `0 ${nativeCurrency}`,
             from: tx.Account?.slice(0, 12) + "..." || "N/A",
             to: tx.Destination?.slice(0, 12) + "..." || "N/A",
             type: tx.TransactionType || "Payment",
@@ -54,11 +66,11 @@ export default component$(() => {
       }
     };
 
-    ws.onerror = (e) => console.log("WS error");
+    ws.onerror = () => console.log("WS error");
     ws.onclose = () => console.log("WS closed");
 
-    // Cleanup
-    return () => ws.close();
+    // Cleanup on network switch or unmount
+    cleanup(() => ws.close());
   });
 
   return (
@@ -67,7 +79,9 @@ export default component$(() => {
       <div class="flex items-center justify-between mb-5 pb-3 border-b border-white/5">
         <div class="flex items-center gap-2">
           <div class="w-2.5 h-2.5 bg-green-400 rounded-full animate-ping" />
-          <span class="text-lg font-bold text-black">Live Transactions</span>
+          <span class="text-lg font-bold text-black">
+            Live {NETWORK_CONFIG[activeNetwork.value].label} Transactions
+          </span>
         </div>
         <span class="text-xs text-black font-mono">{txs.length}</span>
       </div>
@@ -103,7 +117,9 @@ export default component$(() => {
         {txs.length === 0 && (
           <div class="text-center py-16 text-black">
             <div class="w-12 h-12 border-2 border-dashed border-white/20 border-t-white/40 rounded-full animate-spin mx-auto mb-3" />
-            <p class="text-sm">Connecting to XRPL...</p>
+            <p class="text-sm">
+              Connecting to {NETWORK_CONFIG[activeNetwork.value].label}...
+            </p>
           </div>
         )}
       </div>

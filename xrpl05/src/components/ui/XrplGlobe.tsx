@@ -77,7 +77,9 @@ export default component$((props: Props) => {
             if (arcsData.length > 30) arcsData.shift();
             world.arcsData(arcsData);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.error("Error processing transaction:", e);
+        }
       };
     }
   });
@@ -93,7 +95,7 @@ export default component$((props: Props) => {
       }}
     >
       {/* Glow border */}
-      <div class="absolute inset-0 bg-gradient-to-r from-blue-500/30 via-purple-500/30 to-cyan-500/30 rounded-2xl blur-xl animate-pulse -z-10" />
+      <div class="absolute inset-0 bg-linear-to-r from-blue-500/30 via-purple-500/30 to-cyan-500/30 rounded-2xl blur-xl animate-pulse -z-10" />
 
       {/* PERFECTLY CENTERED GLOBE CONTAINER */}
       <div
@@ -107,7 +109,7 @@ export default component$((props: Props) => {
       </div>
 
       {/* Resize handle */}
-      <div class="absolute bottom-2 right-2 w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-400 hover:to-purple-400 rounded-full border-2 border-white/50 cursor-se-resize transition-all shadow-md hover:shadow-lg hover:scale-110" />
+      <div class="absolute bottom-2 right-2 w-5 h-5 bg-linear-to-r from-blue-500 to-purple-500 hover:from-blue-400 hover:to-purple-400 rounded-full border-2 border-white/50 cursor-se-resize transition-all shadow-md hover:shadow-lg hover:scale-110" />
     </div>
   );
 });

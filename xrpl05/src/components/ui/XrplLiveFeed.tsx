@@ -1,10 +1,13 @@
 // XrplLiveFeed.tsx - Combined Globe + Transactions Header
+// Uses the shared NetworkContext so switching networks in the header
+// automatically reconnects the WebSocket feed here.
 import {
   component$,
   useVisibleTask$,
   useStore,
   useSignal,
 } from "@builder.io/qwik";
+import { useNetworkContext, NETWORK_CONFIG } from "~/context/network-context";
 
 interface Transaction {
   hash: string;
@@ -15,13 +18,23 @@ interface Transaction {
 }
 
 export default component$(() => {
+  const { activeNetwork, wsUrl } = useNetworkContext();
   const containerRef = useSignal<HTMLDivElement>();
   const globeRef = useSignal<any>(null);
   const txs = useStore<Transaction[]>([]);
 
-  useVisibleTask$(() => {
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(({ track, cleanup }) => {
+    // Track the shared wsUrl so we reconnect when the user toggles network
+    const currentWsUrl = track(() => wsUrl.value);
+    const currentNetwork = track(() => activeNetwork.value);
+    const nativeCurrency = NETWORK_CONFIG[currentNetwork].nativeCurrency;
+
     const container = containerRef.value;
     if (!container) return;
+
+    // Clear previous transactions on network switch
+    txs.length = 0;
 
     let globeWs: WebSocket | null = null;
     let txWs: WebSocket | null = null;
@@ -37,16 +50,19 @@ export default component$(() => {
     }
 
     function initGlobe() {
-      const world = new (window as any).Globe(container)
-        .backgroundColor("rgba(0,0,0,0.1)")
-        .showGlobe(true)
-        .showAtmosphere(true)
-        .globeImageUrl("//unpkg.com/three-globe/example/img/earth-night.jpg")
-        .atmosphereColor("lightblue")
-        .atmosphereAltitude(0.2)
-        .pointOfView({ altitude: 2.2 }, 1000);
-
-      globeRef.value = world;
+      // Only create the globe instance once; on re-runs just reconnect WS
+      let world = globeRef.value;
+      if (!world) {
+        world = new (window as any).Globe(container)
+          .backgroundColor("rgba(0,0,0,0.1)")
+          .showGlobe(true)
+          .showAtmosphere(true)
+          .globeImageUrl("//unpkg.com/three-globe/example/img/earth-night.jpg")
+          .atmosphereColor("lightblue")
+          .atmosphereAltitude(0.2)
+          .pointOfView({ altitude: 2.2 }, 1000);
+        globeRef.value = world;
+      }
 
       const arcsData: any[] = Array.from({ length: 8 }, () => ({
         startLat: (Math.random() - 0.5) * 180,
@@ -63,7 +79,7 @@ export default component$(() => {
         .arcDashGap(0.04)
         .arcDashAnimateTime(() => Math.random() * 6000 + 2000);
 
-      globeWs = new WebSocket("wss://s1.ripple.com:51234");
+      globeWs = new WebSocket(currentWsUrl);
       globeWs.onopen = () =>
         globeWs?.send(
           JSON.stringify({
@@ -86,12 +102,14 @@ export default component$(() => {
             if (arcsData.length > 25) arcsData.shift();
             world.arcsData(arcsData);
           }
-        } catch (e) {}
+        } catch {
+          // Error parsing globe websocket message
+        }
       };
     }
 
-    // Transactions WebSocket
-    txWs = new WebSocket("wss://s1.ripple.com:51234");
+    // Transactions WebSocket — uses the context-driven URL
+    txWs = new WebSocket(currentWsUrl);
     txWs.onopen = () => {
       txWs?.send(
         JSON.stringify({
@@ -111,8 +129,8 @@ export default component$(() => {
           txs.unshift({
             hash: tx.hash?.slice(0, 16) + "..." || "N/A",
             amount: tx.Amount
-              ? `${(parseInt(tx.Amount) / 1_000_000).toFixed(2)} XRP`
-              : "0 XRP",
+              ? `${(parseInt(tx.Amount) / 1_000_000).toFixed(2)} ${nativeCurrency}`
+              : `0 ${nativeCurrency}`,
             from: tx.Account?.slice(0, 12) + "..." || "N/A",
             to: tx.Destination?.slice(0, 12) + "..." || "N/A",
             type: tx.TransactionType || "Payment",
@@ -120,13 +138,15 @@ export default component$(() => {
 
           if (txs.length > 12) txs.pop();
         }
-      } catch (e) {}
+      } catch {
+        // Error parsing transaction websocket message
+      }
     };
 
-    return () => {
+    cleanup(() => {
       globeWs?.close();
       txWs?.close();
-    };
+    });
   });
 
   return (
@@ -135,9 +155,10 @@ export default component$(() => {
       <div class="flex flex-col lg:flex-row gap-8 items-center justify-between mb-8 pb-8 border-b border-white/5">
         <div class="flex flex-col items-center lg:items-start gap-3">
           <div class="flex items-center gap-3">
-            <div class="w-3 h-3 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full animate-ping" />
-            <h1 class="text-3xl lg:text-4xl font-black bg-gradient-to-r from-black via-emerald-100 to-cyan-100 bg-clip-text text-transparent">
-              Real-time XRPL transactions & global activity
+            <div class="w-3 h-3 bg-linear-to-r from-emerald-400 to-cyan-400 rounded-full animate-ping" />
+            <h1 class="text-3xl lg:text-4xl font-black bg-linear-to-r from-black via-emerald-100 to-cyan-100 bg-clip-text text-transparent">
+              Real-time {NETWORK_CONFIG[activeNetwork.value].label} transactions
+              & global activity
             </h1>
           </div>
         </div>
@@ -153,7 +174,7 @@ export default component$(() => {
       {/* Globe + Transactions Grid */}
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
         {/* Globe */}
-        <div class="lg:col-span-2 h-[400px] lg:h-[500px] relative group">
+        <div class="lg:col-span-2 h-100 lg:h-125 relative group">
           <div
             ref={containerRef}
             class="absolute inset-0 w-full h-full rounded-2xl bg-transparent border-2 border-white/10 shadow-2xl flex items-center justify-center overflow-hidden"
@@ -164,7 +185,7 @@ export default component$(() => {
         </div>
 
         {/* Live Transactions */}
-        <div class="bg-transparent backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl max-h-[500px] flex flex-col">
+        <div class="bg-transparent backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl max-h-125 flex flex-col">
           <div class="flex items-center justify-between mb-5 pb-3 border-b border-white/10">
             <div class="flex items-center gap-2">
               <div class="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />

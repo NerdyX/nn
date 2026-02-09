@@ -8,33 +8,11 @@ import {
   noSerialize,
   type NoSerialize,
 } from "@builder.io/qwik";
-//import XrplGlobe from "~/components/ui/XrplGlobe";
-//import XrplTransactions from "~/components/ui/XrplTransactions";
 import { Client, dropsToXrp } from "xrpl";
 
 import type { LedgerStream, TransactionStream } from "xrpl";
 import XrplLiveFeed from "~/components/ui/XrplLiveFeed";
-
-// ──────────────────────────────────────────────
-// Config
-// ──────────────────────────────────────────────
-
-const NETWORKS = [
-  { key: "mainnet", label: "Mainnet", url: "wss://xrplcluster.com" },
-  { key: "xahau", label: "Xahau", url: "wss://xahau.network" },
-  {
-    key: "testnet",
-    label: "Testnet",
-    url: "wss://s.altnet.rippletest.net:51233",
-  },
-  {
-    key: "devnet",
-    label: "Devnet",
-    url: "wss://s.devnet.rippletest.net:51233",
-  },
-] as const;
-
-type NetworkKey = (typeof NETWORKS)[number]["key"];
+import { useNetworkContext } from "~/context/network-context";
 
 {
   /*const XRPL_TX_TYPES = [
@@ -237,7 +215,8 @@ interface DexTrade {
 // ──────────────────────────────────────────────
 
 export default component$(() => {
-  const network = useSignal<NetworkKey>("testnet");
+  // ── Use the shared network context from layout ──
+  const { activeNetwork, wsUrl } = useNetworkContext();
   const address = useSignal("");
   const searchQuery = useSignal("");
   const queryType = useSignal<"account_info" | "tx" | "ledger">("account_info");
@@ -294,9 +273,11 @@ export default component$(() => {
   };
 
   // ─── Live Data Subscription ────────────────────
+  // Tracks the shared wsUrl from NetworkContext so switching the
+  // network toggle in the header reconnects the WebSocket here.
 
   useTask$(async ({ track, cleanup }) => {
-    track(() => network.value);
+    const currentWsUrl = track(() => wsUrl.value);
 
     if (client.value) {
       try {
@@ -309,8 +290,7 @@ export default component$(() => {
 
     status.value = "connecting";
 
-    const net = NETWORKS.find((n) => n.key === network.value)!;
-    const newClient = new Client(net.url);
+    const newClient = new Client(currentWsUrl);
 
     try {
       await newClient.connect();
@@ -501,12 +481,13 @@ export default component$(() => {
     transactions?: TxEvent[];
   }>(async ({ track }) => {
     track(() => searchQuery.value);
+    const net = track(() => activeNetwork.value);
 
     if (typeof window === "undefined" || !searchQuery.value) return {};
 
     try {
       const res = await fetch(
-        `/api/explorer?network=${network.value}&address=${searchQuery.value}`,
+        `/api/explorer?network=${net}&address=${searchQuery.value}`,
       );
       if (!res.ok) throw new Error("Failed to fetch account data");
       return await res.json();

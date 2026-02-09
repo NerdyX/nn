@@ -4,6 +4,9 @@ import {
   useNetworkContext,
   NETWORK_CONFIG,
   getTxTypesForNetwork,
+  getSidebarNavItems,
+  getTxCategoriesForNetwork,
+  canSignTransaction,
 } from "~/context/network-context";
 import {
   useWalletContext,
@@ -21,8 +24,14 @@ export default component$(() => {
   const { activeNetwork, wsUrl } = useNetworkContext();
   const wallet = useWalletContext();
 
+  // These are reactive — they recompute when activeNetwork changes
   const networkConfig = NETWORK_CONFIG[activeNetwork.value];
   const txTypes = getTxTypesForNetwork(activeNetwork.value);
+  const txCategories = getTxCategoriesForNetwork(activeNetwork.value);
+
+  // ── Network-aware sidebar nav items ──
+  // Automatically filters: Rewards only on Xahau, AMM/Oracles/DID/XChain only on XRPL, etc.
+  const navItems = getSidebarNavItems(activeNetwork.value);
 
   // ── Transaction signing state ──
   const signingStatus = useSignal<"idle" | "signing" | "success" | "error">(
@@ -31,22 +40,11 @@ export default component$(() => {
   const signingMessage = useSignal("");
   const signingQr = useSignal("");
   const selectedTxType = useSignal("Payment");
+  const selectedCategory = useSignal("payment");
 
   // ── Quick-send form state ──
   const sendDestination = useSignal("");
   const sendAmount = useSignal("");
-
-  const navItems = [
-    { id: "accounts", label: "Accounts", href: "/dashboard/accounts" },
-    { id: "explorer", label: "Explorer", href: "/explorer" },
-    { id: "assets", label: "Assets", href: "/dashboard/assets" },
-    { id: "markets", label: "Markets", href: "/dashboard/markets" },
-    { id: "minting", label: "Minting", href: "/dashboard/minting" },
-    { id: "trading", label: "Swap", href: "/dashboard/trading" },
-    { id: "rewards", label: "Rewards", href: "/dashboard/rewards" },
-    { id: "bridging", label: "Bridging", href: "/dashboard/bridging" },
-    { id: "settings", label: "Settings", href: "/dashboard/settings" },
-  ];
 
   // ── Disconnect handler ──
   const handleDisconnect = $(() => {
@@ -55,14 +53,33 @@ export default component$(() => {
     wallet.address.value = "";
     wallet.walletType.value = null;
     wallet.displayName.value = "";
-    // Navigate to home by setting window.location (works outside useTask$)
+
+    // Clear server-side cookie
+    if (typeof document !== "undefined") {
+      document.cookie =
+        "xaman_jwt=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+    }
+
+    // Navigate to home
     window.location.href = "/";
   });
 
   // ── Sign & submit a transaction via Xaman ──
   const handleSignTransaction = $(async (txjson: Record<string, unknown>) => {
+    // Validate against network + wallet state
+    const check = canSignTransaction(
+      String(txjson.TransactionType ?? ""),
+      activeNetwork.value,
+      wallet.connected.value,
+    );
+    if (!check.allowed) {
+      signingStatus.value = "error";
+      signingMessage.value = check.reason ?? "Cannot sign transaction";
+      return;
+    }
+
     signingStatus.value = "signing";
-    signingMessage.value = "Creating transaction payload...";
+    signingMessage.value = `Creating ${String(txjson.TransactionType)} payload on ${networkConfig.label}...`;
     signingQr.value = "";
 
     try {
@@ -79,7 +96,7 @@ export default component$(() => {
 
       if (result.meta.signed) {
         signingStatus.value = "success";
-        signingMessage.value = `Transaction signed! TXID: ${result.response?.txid ?? "N/A"}`;
+        signingMessage.value = `✅ Transaction signed on ${networkConfig.label}! TXID: ${result.response?.txid ?? "N/A"}`;
         signingQr.value = "";
       }
     } catch (err) {
@@ -105,16 +122,41 @@ export default component$(() => {
     });
   });
 
+  // ── Claim Reward handler (Xahau only) ──
+  const handleClaimReward = $(() => {
+    handleSignTransaction({
+      TransactionType: "ClaimReward",
+      Issuer: wallet.address.value,
+    });
+  });
+
   return (
     <div class="mt-14 app-layout">
       {/* Sidebar */}
       <aside class="sidebar">
         {/* Wallet info from shared WalletContext */}
         <section class="sidebar-section">
-          <div class="mb-2 text-lg font-semibold text-gray-900">
+          <div class="mb-1 text-lg font-semibold text-gray-900">
             {wallet.displayName.value
               ? `Welcome, ${wallet.displayName.value}!`
               : "Dashboard"}
+          </div>
+          {/* Network indicator */}
+          <div class="flex items-center gap-2 mb-3">
+            <div
+              class={`w-2.5 h-2.5 rounded-full ${
+                activeNetwork.value === "xahau" ? "bg-xahau" : "bg-xrpl"
+              }`}
+            />
+            <span
+              class="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: networkConfig.color }}
+            >
+              {networkConfig.shortLabel}
+            </span>
+            <span class="text-[10px] text-gray-400 font-mono">
+              {networkConfig.nativeCurrency}
+            </span>
           </div>
         </section>
 
@@ -122,12 +164,10 @@ export default component$(() => {
         {wallet.connected.value && (
           <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-4">
             <div class="flex items-center gap-2 mb-2">
-              <div
-                class={`w-2 h-2 rounded-full ${wallet.connected.value ? "bg-green-500" : "bg-red-500"}`}
-              />
+              <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span class="text-xs font-medium text-gray-600 uppercase">
-                {wallet.walletType.value ?? "Unknown"} &middot;{" "}
-                {networkConfig.label}
+                {wallet.walletType.value ?? "Unknown"} ·{" "}
+                {networkConfig.shortLabel}
               </span>
             </div>
             <div class="font-mono text-sm text-gray-900 truncate">
@@ -151,6 +191,7 @@ export default component$(() => {
         )}
 
         <nav class="sidebar-nav">
+          {/* Network-aware navigation: items auto-filter based on activeNetwork */}
           {navItems.map((item) => (
             <Link
               key={item.id}
@@ -161,7 +202,23 @@ export default component$(() => {
               }}
               onClick$={() => (activePage.value = item.id)}
             >
+              <span class="nav-icon">{item.icon}</span>
               <span>{item.label}</span>
+              {/* Show network badge for network-exclusive items */}
+              {item.networkOnly && (
+                <span
+                  class="ml-auto text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor:
+                      item.networkOnly === "xahau"
+                        ? "rgba(245,166,35,0.15)"
+                        : "rgba(99,64,188,0.15)",
+                    color: item.networkOnly === "xahau" ? "#c9871a" : "#6340bc",
+                  }}
+                >
+                  {item.networkOnly === "xahau" ? "XAH" : "XRP"}
+                </span>
+              )}
             </Link>
           ))}
 
@@ -236,11 +293,44 @@ export default component$(() => {
               "Dashboard"}
           </h1>
           <div class="topbar-right">
-            <span class="network-pill">{networkConfig.label}</span>
+            <span
+              class="network-pill"
+              style={{
+                backgroundColor:
+                  activeNetwork.value === "xahau"
+                    ? "rgba(245,166,35,0.15)"
+                    : "rgba(99,64,188,0.15)",
+                color: networkConfig.color,
+              }}
+            >
+              {networkConfig.shortLabel} · {networkConfig.nativeCurrency}
+            </span>
           </div>
         </header>
 
         <div class="content-area">
+          {/* Xahau Rewards Banner — only visible when Xahau is active */}
+          {activeNetwork.value === "xahau" && wallet.connected.value && (
+            <div class="mb-6 rounded-2xl border border-xahau/30 bg-xahau/5 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🎁</span>
+                <div>
+                  <h3 class="font-bold text-gray-900">Xahau Rewards</h3>
+                  <p class="text-sm text-gray-600">
+                    Claim your XAH network rewards directly from the dashboard.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick$={handleClaimReward}
+                class="shrink-0 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: networkConfig.color }}
+              >
+                Claim Reward
+              </button>
+            </div>
+          )}
+
           {/* Quick Send Card */}
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -280,7 +370,8 @@ export default component$(() => {
                   />
                 </div>
                 <button
-                  class="w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 text-sm transition-colors disabled:opacity-50"
+                  class="w-full rounded-lg text-white font-semibold py-2.5 text-sm transition-colors disabled:opacity-50"
+                  style={{ backgroundColor: networkConfig.color }}
                   disabled={
                     !wallet.connected.value ||
                     !sendDestination.value ||
@@ -288,26 +379,70 @@ export default component$(() => {
                   }
                   onClick$={handleQuickSend}
                 >
-                  Sign & Send via Xaman
+                  Sign &amp; Send {networkConfig.nativeCurrency} via Xaman
                 </button>
               </div>
             </div>
 
-            {/* Transaction Type Selector */}
+            {/* Transaction Category & Type Selector */}
             <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-              <h2 class="text-lg font-bold text-gray-900 mb-4">
-                Sign Transaction ({activeNetwork.value.toUpperCase()})
+              <h2 class="text-lg font-bold text-gray-900 mb-1">
+                Sign Transaction
               </h2>
-              <p class="text-sm text-gray-600 mb-4">
-                {txTypes.length} transaction types available on{" "}
-                {networkConfig.label}
+              <p class="text-sm text-gray-500 mb-4">
+                {txTypes.length} types available on{" "}
+                <span style={{ color: networkConfig.color }}>
+                  {networkConfig.shortLabel}
+                </span>
               </p>
+
+              {/* Category pills */}
+              <div class="flex flex-wrap gap-1.5 mb-4">
+                {txCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick$={() => {
+                      selectedCategory.value = cat.id;
+                      // Auto-select first type in category
+                      const firstType = cat.types.find((t) =>
+                        (txTypes as readonly string[]).includes(t),
+                      );
+                      if (firstType) selectedTxType.value = firstType;
+                    }}
+                    class={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                      selectedCategory.value === cat.id
+                        ? "text-white shadow-sm"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                    style={
+                      selectedCategory.value === cat.id
+                        ? { backgroundColor: networkConfig.color }
+                        : undefined
+                    }
+                  >
+                    {cat.icon} {cat.label}
+                    {cat.networkOnly && (
+                      <span class="ml-1 opacity-70">
+                        ({cat.networkOnly === "xahau" ? "XAH" : "XRP"})
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Type selector filtered by selected category */}
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                   Transaction Type
                 </label>
                 <select
-                  class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:ring-2 focus:border-transparent bg-white"
+                  style={
+                    { "--tw-ring-color": networkConfig.color } as Record<
+                      string,
+                      string
+                    >
+                  }
                   value={selectedTxType.value}
                   onChange$={(e) =>
                     (selectedTxType.value = (
@@ -315,15 +450,26 @@ export default component$(() => {
                     ).value)
                   }
                 >
-                  {txTypes.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
+                  {(() => {
+                    const cat = txCategories.find(
+                      (c) => c.id === selectedCategory.value,
+                    );
+                    const typesInCat = cat
+                      ? cat.types.filter((t) =>
+                          (txTypes as readonly string[]).includes(t),
+                        )
+                      : [...txTypes];
+                    return typesInCat.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ));
+                  })()}
                 </select>
               </div>
               <button
-                class="w-full mt-4 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2.5 text-sm transition-colors disabled:opacity-50"
+                class="w-full mt-4 rounded-lg text-white font-semibold py-2.5 text-sm transition-colors disabled:opacity-50"
+                style={{ backgroundColor: networkConfig.color }}
                 disabled={!wallet.connected.value}
                 onClick$={() => {
                   handleSignTransaction({
@@ -331,7 +477,7 @@ export default component$(() => {
                   });
                 }}
               >
-                Create &amp; Sign {selectedTxType.value}
+                Sign {selectedTxType.value} on {networkConfig.shortLabel}
               </button>
             </div>
           </div>
@@ -403,7 +549,10 @@ export default component$(() => {
           )}
 
           {/* Network Info Card */}
-          <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div
+            class="rounded-2xl border bg-white p-6 shadow-sm"
+            style={{ borderColor: networkConfig.color + "30" }}
+          >
             <h2 class="text-lg font-bold text-gray-900 mb-4">
               Network Details
             </h2>
@@ -412,7 +561,13 @@ export default component$(() => {
                 <div class="text-xs text-gray-500 font-medium mb-1">
                   NETWORK
                 </div>
-                <div class="text-lg font-bold text-gray-900">
+                <div
+                  class="text-lg font-bold"
+                  style={{ color: networkConfig.color }}
+                >
+                  {networkConfig.shortLabel}
+                </div>
+                <div class="text-xs text-gray-400 mt-0.5">
                   {networkConfig.label}
                 </div>
               </div>
@@ -420,8 +575,14 @@ export default component$(() => {
                 <div class="text-xs text-gray-500 font-medium mb-1">
                   CURRENCY
                 </div>
-                <div class="text-lg font-bold text-cyan-600">
+                <div
+                  class="text-lg font-bold"
+                  style={{ color: networkConfig.color }}
+                >
                   {networkConfig.nativeCurrency}
+                </div>
+                <div class="text-xs text-gray-400 mt-0.5">
+                  {networkConfig.nativeCurrencyLong}
                 </div>
               </div>
               <div class="rounded-lg bg-gray-50 p-4">
@@ -436,9 +597,47 @@ export default component$(() => {
                 <div class="text-xs text-gray-500 font-medium mb-1">
                   TX TYPES
                 </div>
-                <div class="text-lg font-bold text-purple-600">
+                <div
+                  class="text-lg font-bold"
+                  style={{ color: networkConfig.color }}
+                >
                   {txTypes.length}
                 </div>
+                <div class="text-xs text-gray-400 mt-0.5">
+                  {txCategories.length} categories
+                </div>
+              </div>
+            </div>
+
+            {/* Exclusive transaction types for this network */}
+            <div class="mt-5 pt-4 border-t border-gray-100">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                {networkConfig.shortLabel}-Exclusive Features
+              </h3>
+              <div class="flex flex-wrap gap-2">
+                {txCategories
+                  .filter((cat) => cat.networkOnly === activeNetwork.value)
+                  .map((cat) => (
+                    <div
+                      key={cat.id}
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+                      style={{
+                        backgroundColor: networkConfig.color + "15",
+                        color: networkConfig.color,
+                      }}
+                    >
+                      <span>{cat.icon}</span>
+                      <span>{cat.label}</span>
+                    </div>
+                  ))}
+                {txCategories.filter(
+                  (cat) => cat.networkOnly === activeNetwork.value,
+                ).length === 0 && (
+                  <span class="text-xs text-gray-400 italic">
+                    All features on {networkConfig.shortLabel} are shared with
+                    the other network
+                  </span>
+                )}
               </div>
             </div>
           </div>

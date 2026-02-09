@@ -27,11 +27,5 @@
     ],
     "types": ["@cloudflare/workers-types/2023-07-01", "node"],
   },
-  "include": [
-    "src",
-    "./*.d.ts",
-    "./*.config.ts",
-    "tailwind.config.js",
-    "postcss.config.js",
-  ],
+  "include": ["src", "./*.d.ts", "./*.config.ts"],
 }

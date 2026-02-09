@@ -7,7 +7,7 @@ import {
   useVisibleTask$,
 } from "@builder.io/qwik";
 import { routeLoader$, useLocation, useNavigate } from "@builder.io/qwik-city";
-import { Header } from "../components/header/header";
+import { HeaderModern } from "../components/header/header-modern";
 import {
   NetworkContext,
   NETWORK_CONFIG,
@@ -19,9 +19,6 @@ import {
   restoreWalletSession,
 } from "../context/wallet-context";
 
-// ──────────────────────────────────────────────
-// Server-side: validate Xaman JWT from cookie
-// ──────────────────────────────────────────────
 export const useXamanSession = routeLoader$(async ({ cookie }) => {
   const jwt = cookie.get("xaman_jwt")?.value;
 
@@ -54,17 +51,12 @@ export const useXamanSession = routeLoader$(async ({ cookie }) => {
   }
 });
 
-// ──────────────────────────────────────────────
-// Root layout
-// ──────────────────────────────────────────────
 export default component$(() => {
-  // ── Network context (single source of truth) ──
   const activeNetwork = useSignal<Network>("xrpl");
   const wsUrl = useSignal<string>(NETWORK_CONFIG.xrpl.ws);
 
   useContextProvider(NetworkContext, { activeNetwork, wsUrl });
 
-  // ── Wallet context (single source of truth) ──
   const walletConnected = useSignal(false);
   const walletType = useSignal<WalletType>(null);
   const walletAddress = useSignal("");
@@ -77,21 +69,16 @@ export default component$(() => {
     displayName: walletDisplayName,
   });
 
-  // Keep wsUrl in sync whenever activeNetwork changes
   useTask$(({ track }) => {
     const net = track(() => activeNetwork.value);
     wsUrl.value = NETWORK_CONFIG[net].ws;
 
-    // Persist preference to localStorage (client only)
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("preferredNetwork", net);
     }
   });
 
-  // Hydrate saved preferences from localStorage on client
-  // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(() => {
-    // Restore network preference
     if (typeof localStorage !== "undefined") {
       const saved = localStorage.getItem("preferredNetwork");
       if (saved === "xahau" || saved === "xrpl") {
@@ -99,7 +86,6 @@ export default component$(() => {
       }
     }
 
-    // Restore wallet session from localStorage
     const session = restoreWalletSession();
     if (session) {
       walletConnected.value = true;
@@ -109,7 +95,6 @@ export default component$(() => {
     }
   });
 
-  // ── Dashboard auth guard ──
   const serverSession = useXamanSession();
   const location = useLocation();
   const nav = useNavigate();
@@ -119,8 +104,6 @@ export default component$(() => {
     const serverConnected = track(() => serverSession.value?.connected);
     const clientConnected = track(() => walletConnected.value);
 
-    // Only guard /dashboard routes — allow if either server
-    // cookie session OR client-side wallet session is active
     if (
       pathname.startsWith("/dashboard") &&
       !serverConnected &&
@@ -130,7 +113,6 @@ export default component$(() => {
     }
   });
 
-  // Sync server session data into wallet context when available
   useTask$(({ track }) => {
     const sess = track(() => serverSession.value);
     if (sess?.connected && sess.address) {
@@ -144,10 +126,12 @@ export default component$(() => {
   });
 
   return (
-    <div class="flex flex-col min-h-screen">
-      <Header />
+    <div class="flex flex-col min-h-screen bg-white">
+      <HeaderModern />
       <main class="flex-1">
-        <Slot />
+        <div class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+          <Slot />
+        </div>
       </main>
     </div>
   );

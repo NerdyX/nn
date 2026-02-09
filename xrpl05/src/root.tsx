@@ -1,14 +1,15 @@
 import { component$ } from "@builder.io/qwik";
-import {
-  QwikCityProvider,
-  RouterOutlet,
-  //ServiceWorkerRegister,
-} from "@builder.io/qwik-city";
+import { QwikCityProvider, RouterOutlet } from "@builder.io/qwik-city";
 import { RouterHead } from "./components/router-head/router-head";
+import { ConsentModal } from "./components/ui/consent-modal";
+import { ToastContainer } from "./components/ui/toast";
+import { useToast } from "./components/ui/toast";
 
 import "./global.css";
 
 export default component$(() => {
+  const { toasts, removeToast } = useToast();
+
   return (
     <QwikCityProvider>
       <head>
@@ -17,7 +18,8 @@ export default component$(() => {
       </head>
       <body lang="en" class="flex flex-col min-h-screen">
         <RouterOutlet />
-        {/* <ServiceWorkerRegister /> */}
+        <ConsentModal />
+        <ToastContainer toasts={toasts.value} onClose={removeToast} />
       </body>
     </QwikCityProvider>
   );

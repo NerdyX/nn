@@ -21,114 +21,231 @@ const data = [
 
 export default component$(() => {
   return (
-    <div class="bg-linear-to-b from-carbon_black-500 via-carbon_black-600 to-alabaster_grey-500">
+    <div class="bg-white min-h-screen flex flex-col">
+      <style>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes floatY {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-20px);
+          }
+        }
+
+        @keyframes glow {
+          0%, 100% {
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+          }
+          50% {
+            box-shadow: 0 0 40px rgba(37, 99, 235, 0.6);
+          }
+        }
+
+        @keyframes marquee {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-50%); }
+        }
+
+        .hero-title {
+          animation: fadeInUp 0.8s ease-out 0.2s backwards;
+        }
+
+        .hero-subtitle {
+          animation: fadeInUp 0.8s ease-out 0.4s backwards;
+        }
+
+        .hero-description {
+          animation: fadeInUp 0.8s ease-out 0.6s backwards;
+        }
+
+        .hero-button {
+          animation: fadeInUp 0.8s ease-out 0.8s backwards;
+        }
+
+        .hero-cards {
+          animation: fadeInUp 0.8s ease-out 1s backwards;
+        }
+
+        .floating-element {
+          animation: floatY 6s ease-in-out infinite;
+        }
+
+        .glow-element {
+          animation: glow 3s ease-in-out infinite;
+        }
+
+        .marquee-container {
+          display: flex;
+          overflow: hidden;
+          gap: 1.5rem;
+        }
+
+        .marquee-content {
+          display: flex;
+          gap: 1.5rem;
+          animation: marquee 40s linear infinite;
+          flex-shrink: 0;
+        }
+
+        .marquee-container:hover .marquee-content {
+          animation-play-state: paused;
+        }
+      `}</style>
+
       {/* Hero Section */}
-      <section class="relative w-full min-h-screen overflow-hidden flex items-center justify-center pt-20 pb-10">
-        {/* Animated Background Elements */}
+      <section class="relative w-full flex-1 overflow-hidden flex items-center justify-center pt-20 pb-20">
+        {/* Glassmorphic Background Gradient */}
+        <div class="absolute inset-0 bg-gradient-to-br from-white via-blue-50/40 to-white"></div>
+
+        {/* Animated Background Blobs */}
         <div class="absolute inset-0 overflow-hidden">
-          <div class="absolute -top-40 -right-40 w-80 h-80 bg-blazing_flame-500/20 rounded-full blur-3xl animate-pulse"></div>
+          <div class="floating-element absolute -top-32 -right-32 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-transparent rounded-full blur-3xl"></div>
           <div
-            class="absolute -bottom-40 -left-40 w-80 h-80 bg-blazing_flame-600/20 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: "1s" }}
+            class="floating-element absolute -bottom-32 -left-32 w-96 h-96 bg-gradient-to-br from-amber-400/20 to-transparent rounded-full blur-3xl"
+            style={{ animationDelay: "-2s" }}
           ></div>
           <div
-            class="absolute top-1/2 left-1/2 w-96 h-96 bg-blazing_flame-500/10 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: "2s" }}
+            class="floating-element absolute top-1/3 right-1/4 w-80 h-80 bg-gradient-to-br from-blue-300/10 to-transparent rounded-full blur-3xl"
+            style={{ animationDelay: "-1s" }}
           ></div>
         </div>
 
         {/* Content */}
-        <div class="relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 class="lg:text-9xl md:text-7xl sm:text-7xl text-7xl font-extralight text-white-500 mb-6 leading-tight tracking-tight">
+        <div class="relative z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          {/* Subtitle Badge */}
+          <div class="hero-subtitle flex justify-center mb-8">
+            <div class="glass px-4 py-2 rounded-full border border-blue-200/50">
+              <span class="text-sm font-medium text-blue-700">
+                ✨ Multi-Ledger Operating System
+              </span>
+            </div>
+          </div>
+
+          {/* Main Title */}
+          <h1 class="hero-title text-5xl sm:text-6xl lg:text-7xl font-bold bg-gradient-to-r from-blue-600 via-blue-600 to-amber-500 bg-clip-text text-transparent leading-tight tracking-tight mb-6">
             {"{XRPL}"}OS
           </h1>
-          <span class="block bg-clip-text text-black">
-            Multi-Ledger Operating System
-          </span>
 
-          <p class="text-lg sm:text-xl text-dust_grey-300 max-w-2xl mx-auto mb-8 leading-relaxed font-light">
-            The sovereignty‑first web terminal that plugs you directly into the
-            XRP Ledger and Xahau networks. Create, manage, and trade digital
-            assets from a single, streamlined interface with enterprise‑grade
-            security.
+          {/* Subtitle */}
+          <p class="hero-subtitle text-2xl sm:text-2xl font-semibold text-gray-800 mb-6 leading-tight">
+            Sovereignty-First Web Terminal
           </p>
 
-          {/* Feature Cards Carousel */}
-          <div class="mt-12 w-full">
-            <style>{`
-              @keyframes marquee {
-                0% { transform: translateX(0%); }
-                100% { transform: translateX(-50%); }
-              }
-              .marquee-container {
-                display: flex;
-                overflow: hidden;
-                gap: 1.5rem;
-              }
-              .marquee-content {
-                display: flex;
-                gap: 1.5rem;
-                animation: marquee 40s linear infinite;
-                flex-shrink: 0;
-              }
-              .marquee-container:hover .marquee-content {
-                animation-play-state: paused;
-              }
-            `}</style>
+          {/* Description */}
+          <p class="hero-description text-lg sm:text-xl text-gray-600 max-w-3xl mx-auto mb-12 leading-relaxed">
+            The unified interface for creating, managing, and trading digital
+            assets across XRP Ledger and Xahau networks. Enterprise-grade
+            security meets intuitive design.
+          </p>
+
+          {/* CTA Buttons */}
+          <div class="hero-button flex flex-col sm:flex-row gap-4 justify-center mb-16">
+            <button class="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-blue-500/30 glow-element">
+              Launch Dashboard
+            </button>
+            <button class="px-8 py-4 bg-white hover:bg-gray-50 text-gray-900 font-semibold rounded-xl border-2 border-gray-200 hover:border-gray-300 transition-all duration-300 shadow-md hover:shadow-lg">
+              Learn More
+            </button>
+          </div>
+
+          {/* Feature Cards */}
+          <div class="hero-cards mt-16 w-full">
             <div class="marquee-container">
               <div class="marquee-content">
                 {[
                   {
-                    title: "Issue and manage tokens",
-                    desc: "Launch and manage fungible tokens, stable assets, or utility credits directly from a unified terminal.",
+                    icon: "🪙",
+                    title: "Issue & Manage Tokens",
+                    desc: "Launch fungible tokens and stable assets directly",
                   },
                   {
-                    title: "Trade and settle on-chain",
-                    desc: "Connect to XRPL and Xahau markets to swap assets, manage liquidity, and settle payments in real time.",
+                    icon: "💱",
+                    title: "Trade On-Chain",
+                    desc: "Swap assets and manage liquidity in real-time",
                   },
                   {
-                    title: "Explore DeFi apps",
-                    desc: "Discover and interact with DeFi protocols and ecosystem apps without juggling multiple dashboards.",
+                    icon: "🏗️",
+                    title: "Build Systems",
+                    desc: "Develop workflows spanning multiple networks",
                   },
                   {
-                    title: "Build on-chain systems",
-                    desc: "Develop and operate workflows and automations that span XRPL and Xahau networks.",
+                    icon: "🔐",
+                    title: "Enterprise Security",
+                    desc: "Institutional-grade protection for your assets",
                   },
                   {
-                    title: "Security & Sovereignty",
-                    desc: "Enterprise-grade security with intuitive navigation and real-time network connectivity.",
+                    icon: "⚡",
+                    title: "Instant Settlement",
+                    desc: "Fast, low-cost transactions across ledgers",
                   },
                 ].map((item, i) => (
                   <div
                     key={i}
-                    class="shrink-0 w-80 bg-linear-to-br from-carbon_black-600/50 to-carbon_black-700/30 rounded-xl p-6 border border-dust_grey-300/50 hover:border-blazing_flame-500/50 transition-all duration-300 backdrop-blur-sm hover:bg-linear-to-br hover:from-carbon_black-600/70 hover:to-carbon_black-700/50 group"
+                    class="shrink-0 w-72 glass rounded-2xl p-6 border border-white/40 hover:border-blue-300/50 transition-all duration-300 group hover:shadow-xl"
                   >
-                    <h4 class="text-white-500 font-semibold text-base mb-3 group-hover:text-blazing_flame-500 transition-colors">
+                    <div class="text-4xl mb-3">{item.icon}</div>
+                    <h4 class="font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
                       {item.title}
                     </h4>
-                    <p class="text-dust_grey-300 text-sm leading-relaxed group-hover:text-dust_grey-200 transition-colors">
+                    <p class="text-sm text-gray-600 group-hover:text-gray-700 transition-colors">
                       {item.desc}
                     </p>
                   </div>
                 ))}
                 {[
                   {
-                    title: "Issue and manage tokens",
-                    desc: "Launch and manage fungible tokens, stable assets, or utility credits directly from a unified terminal.",
+                    icon: "🪙",
+                    title: "Issue & Manage Tokens",
+                    desc: "Launch fungible tokens and stable assets directly",
                   },
                   {
-                    title: "Trade and settle on-chain",
-                    desc: "Connect to XRPL and Xahau markets to swap assets, manage liquidity, and settle payments in real time.",
+                    icon: "💱",
+                    title: "Trade On-Chain",
+                    desc: "Swap assets and manage liquidity in real-time",
                   },
                 ].map((item, i) => (
                   <div
                     key={`dup-${i}`}
-                    class="shrink-0 w-80 bg-linear-to-br from-carbon_black-600/50 to-carbon_black-700/30 rounded-xl p-6 border border-dust_grey-300/50 hover:border-blazing_flame-500/50 transition-all duration-300 backdrop-blur-sm hover:bg-linear-to-br hover:from-carbon_black-600/70 hover:to-carbon_black-700/50 group"
+                    class="shrink-0 w-72 glass rounded-2xl p-6 border border-white/40 hover:border-blue-300/50 transition-all duration-300 group hover:shadow-xl"
                   >
-                    <h4 class="text-white-500 font-semibold text-base mb-3 group-hover:text-blazing_flame-500 transition-colors">
+                    <div class="text-4xl mb-3">{item.icon}</div>
+                    <h4 class="font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
                       {item.title}
                     </h4>
-                    <p class="text-dust_grey-300 text-sm leading-relaxed group-hover:text-dust_grey-200 transition-colors">
+                    <p class="text-sm text-gray-600 group-hover:text-gray-700 transition-colors">
                       {item.desc}
                     </p>
                   </div>
@@ -140,17 +257,17 @@ export default component$(() => {
       </section>
 
       {/* Three Networks Section */}
-      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-alabaster_grey-500">
+      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50">
         <div class="max-w-7xl mx-auto">
           <div class="text-center mb-16">
-            <h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-carbon_black-500 mb-4 leading-tight">
+            <h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4 leading-tight">
               Three Networks.
-              <span class="text-transparent bg-clip-text bg-linear-to-r from-blazing_flame-500 to-blazing_flame-600">
+              <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-amber-500">
                 {" "}
                 One Platform.
               </span>
             </h2>
-            <p class="text-lg text-carbon_black-700 max-w-2xl mx-auto font-light">
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto font-light">
               Seamlessly connect and manage assets across multiple blockchain
               networks
             </p>
@@ -160,18 +277,18 @@ export default component$(() => {
             {data.map((n, index) => (
               <div
                 key={index}
-                class="group relative bg-white-500 rounded-2xl p-8 border border-dust_grey-400 hover:border-blazing_flame-500 transition-all duration-500 hover:shadow-xl hover:shadow-blazing_flame-500/10 overflow-hidden"
+                class="group relative glass rounded-2xl p-8 border border-white/40 hover:border-blue-300/50 transition-all duration-500 hover:shadow-xl hover:shadow-blue-500/10 overflow-hidden"
               >
-                <div class="absolute inset-0 bg-linear-to-br from-blazing_flame-500/0 to-blazing_flame-600/0 group-hover:from-blazing_flame-500/5 group-hover:to-blazing_flame-600/5 transition-all duration-500"></div>
+                <div class="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-600/0 group-hover:from-blue-500/5 group-hover:to-blue-600/5 transition-all duration-500"></div>
                 <div class="relative z-10">
-                  <h3 class="text-3xl font-bold text-carbon_black-500 mb-4 group-hover:text-blazing_flame-500 transition-colors">
+                  <h3 class="text-3xl font-bold text-gray-900 mb-4 group-hover:text-blue-600 transition-colors">
                     {n.title}
                   </h3>
-                  <p class="text-carbon_black-700 leading-relaxed text-base font-light">
+                  <p class="text-gray-700 leading-relaxed text-base font-light">
                     {n.description}
                   </p>
                 </div>
-                <div class="absolute bottom-0 left-0 w-full h-1 bg-linear-to-r from-blazing_flame-500 to-blazing_flame-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
+                <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
               </div>
             ))}
           </div>
@@ -179,18 +296,18 @@ export default component$(() => {
       </section>
 
       {/* Philosophy Section */}
-      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-alabaster_grey-500 to-alabaster_grey-700">
+      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
         <div class="max-w-4xl mx-auto">
-          <div class="bg-linear-to-br from-carbon_black-500 to-carbon_black-600 rounded-2xl p-12 border border-dust_grey-300/50 shadow-2xl">
+          <div class="glass rounded-3xl p-12 border border-white/40 shadow-2xl hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-500">
             <div class="mb-8">
-              <span class="inline-block px-4 py-1 bg-blazing_flame-500/20 border border-blazing_flame-500/50 text-blazing_flame-500 text-sm font-semibold rounded-full mb-4">
-                Our Philosophy
+              <span class="inline-block px-4 py-2 bg-blue-100 border border-blue-300/50 text-blue-700 text-sm font-semibold rounded-full mb-4">
+                ✨ Our Philosophy
               </span>
             </div>
-            <h2 class="text-4xl sm:text-5xl font-bold text-white-500 mb-6 leading-tight">
+            <h2 class="text-4xl sm:text-5xl font-bold text-gray-900 mb-6 leading-tight">
               Designed for Sovereignty
             </h2>
-            <p class="text-dust_grey-300 text-lg leading-relaxed font-light">
+            <p class="text-gray-700 text-lg leading-relaxed font-light">
               Every action in {`{XRPL}`}OS is explicit and intentional.
               Transactions are grouped by purpose—Create, Set, Claim, Deposit,
               Cancel—so users understand exactly what they are signing before
@@ -208,20 +325,20 @@ export default component$(() => {
       </section>
 
       {/* Footer */}
-      <footer class="bg-carbon_black-500 text-dust_grey-300 border-t border-dust_grey-300">
+      <footer class="bg-gradient-to-b from-white to-gray-50 text-gray-600 border-t border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-12 mb-12">
             <div class="lg:col-span-2">
               <div class="mb-4">
                 <a
                   href="/"
-                  class="text-2xl font-bold text-white-500 hover:text-blazing_flame-500 transition-colors"
+                  class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
                   aria-label="logo"
                 >
                   {"{XRPL}"}OS
                 </a>
               </div>
-              <p class="text-dust_grey-400 mb-6 text-sm leading-relaxed font-light">
+              <p class="text-gray-600 mb-6 text-sm leading-relaxed font-light">
                 The decentralized operating system for creating, managing, and
                 trading digital assets across XRP Ledger, Flare, and Xahau
                 networks with security and sovereignty at its core.
@@ -249,7 +366,7 @@ export default component$(() => {
                     key={social.name}
                     href="#"
                     target="_blank"
-                    class="p-2 rounded-lg hover:bg-blazing_flame-500/20 text-dust_grey-300 hover:text-blazing_flame-500 transition-all duration-300 group"
+                    class="p-2 rounded-lg hover:bg-blue-100 text-gray-600 hover:text-blue-600 transition-all duration-300 group"
                     aria-label={social.name}
                   >
                     <svg
@@ -290,7 +407,7 @@ export default component$(() => {
               },
             ].map((section) => (
               <div key={section.title}>
-                <h3 class="text-white-500 font-semibold text-sm uppercase tracking-wider mb-4">
+                <h3 class="text-gray-900 font-semibold text-sm uppercase tracking-wider mb-4">
                   {section.title}
                 </h3>
                 <nav class="flex flex-col gap-3">
@@ -298,7 +415,7 @@ export default component$(() => {
                     <a
                       key={link}
                       href="#"
-                      class="text-dust_grey-400 hover:text-blazing_flame-500 transition-colors text-sm font-light"
+                      class="text-gray-600 hover:text-blue-600 transition-colors text-sm font-light"
                     >
                       {link}
                     </a>
@@ -308,8 +425,8 @@ export default component$(() => {
             ))}
           </div>
 
-          <div class="border-t border-dust_grey-300 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p class="text-dust_grey-400 text-sm font-light">
+          <div class="border-t border-gray-200 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p class="text-gray-600 text-sm font-light">
               © 2025 – Product of{" "}
               <a href="https://nrdxlab.com">{"{NRDX}"}Labs</a>. All rights
               reserved.
@@ -317,13 +434,13 @@ export default component$(() => {
             <div class="flex gap-6">
               <a
                 href="#"
-                class="text-dust_grey-400 hover:text-blazing_flame-500 text-sm transition-colors"
+                class="text-gray-600 hover:text-blue-600 text-sm transition-colors"
               >
                 Status
               </a>
               <a
                 href="#"
-                class="text-dust_grey-400 hover:text-blazing_flame-500 text-sm transition-colors"
+                class="text-gray-600 hover:text-blue-600 text-sm transition-colors"
               >
                 Changelog
               </a>

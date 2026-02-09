@@ -1,323 +1,898 @@
-import { component$, useSignal } from "@builder.io/qwik";
+import {
+  component$,
+  useSignal,
+  useVisibleTask$,
+  $,
+  useComputed$,
+} from "@builder.io/qwik";
+import { useWalletContext, truncateAddress } from "~/context/wallet-context";
+import { useNetworkContext, NETWORK_CONFIG } from "~/context/network-context";
+import { signTransaction, waitForSignature } from "~/lib/xaman-auth";
 
-interface Nft {
-  id: string;
-  name: string;
+// ──────────────────────────────────────────────
+// Types
+// ──────────────────────────────────────────────
+
+interface SellOffer {
+  index: string;
+  amount: string | { value: string; currency: string; issuer: string };
+  owner: string;
+  destination?: string;
+  expiration?: number;
+}
+
+interface BuyOffer {
+  index: string;
+  amount: string | { value: string; currency: string; issuer: string };
+  owner: string;
+  expiration?: number;
+}
+
+interface NftItem {
+  nftokenId: string;
+  issuer: string;
+  owner: string;
+  taxon: number;
+  serial: number;
+  uri: string;
+  resolvedUri: string;
   image: string;
-  collection: string;
-  owner: string;
-  price: string;
-  lastSale: string;
-}
-
-interface Token {
-  id: string;
-  symbol: string;
   name: string;
-  totalSupply: string;
-  decimals: number;
   description: string;
-  owner: string;
-  createdDate: string;
+  collection: string;
+  flags: number;
+  transferFee: number;
+  sellOffers: SellOffer[];
+  buyOffers: BuyOffer[];
 }
 
-interface MintFormData {
-  nftName: string;
-  collectionName: string;
-  description: string;
-  royalty: string;
+interface MarketplaceData {
+  success: boolean;
+  network: string;
+  address: string;
+  balance: string;
+  totalNfts: number;
+  listedCount: number;
+  totalSellOffers: number;
+  totalBuyOffers: number;
+  nfts: NftItem[];
+  queriedAt: string;
 }
 
-interface TokenFormData {
-  tokenName: string;
-  tokenSymbol: string;
-  totalSupply: string;
-  decimals: string;
-  description: string;
+// ──────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────
+
+function formatAmount(
+  amount: string | { value: string; currency: string; issuer: string },
+  nativeCurrency: string,
+): string {
+  if (typeof amount === "string") {
+    const xrp = Number(amount) / 1_000_000;
+    return `${xrp.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${nativeCurrency}`;
+  }
+  return `${amount.value} ${amount.currency}`;
 }
+
+function getLowestSellPrice(
+  offers: SellOffer[],
+  nativeCurrency: string,
+): string | null {
+  if (!offers.length) return null;
+  let lowest = Infinity;
+  let lowestFormatted = "";
+  for (const o of offers) {
+    const val =
+      typeof o.amount === "string"
+        ? Number(o.amount) / 1_000_000
+        : Number(o.amount.value);
+    if (val < lowest) {
+      lowest = val;
+      lowestFormatted = formatAmount(o.amount, nativeCurrency);
+    }
+  }
+  return lowestFormatted;
+}
+
+function getHighestBuyPrice(
+  offers: BuyOffer[],
+  nativeCurrency: string,
+): string | null {
+  if (!offers.length) return null;
+  let highest = -Infinity;
+  let highestFormatted = "";
+  for (const o of offers) {
+    const val =
+      typeof o.amount === "string"
+        ? Number(o.amount) / 1_000_000
+        : Number(o.amount.value);
+    if (val > highest) {
+      highest = val;
+      highestFormatted = formatAmount(o.amount, nativeCurrency);
+    }
+  }
+  return highestFormatted;
+}
+
+const PLACEHOLDER_IMG =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='%23e5e7eb'%3E%3Crect width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='48' fill='%239ca3af'%3ENFT%3C/text%3E%3C/svg%3E";
+
+// ──────────────────────────────────────────────
+// Component
+// ──────────────────────────────────────────────
 
 export default component$(() => {
-  // Mock NFTs for template preview
-  const nfts = useSignal<Nft[]>(
-    Array.from({ length: 20 }, (_, i) => ({
-      id: `NFT-${i + 1}`,
-      name: `Xahau NFT #${i + 1000}`,
-      image: `https://picsum.photos/seed/nft${i}/600/600`,
-      collection: `Collection ${Math.ceil((i + 1) / 5)}`,
-      owner: `rOwner${i + 1}XYZ`,
-      price: `${(Math.random() * 10 + 1).toFixed(2)} XRP`,
-      lastSale: `${(Math.random() * 5 + 1).toFixed(2)} XRP`,
-    })),
-  );
+  const wallet = useWalletContext();
+  const { activeNetwork } = useNetworkContext();
+  const networkConfig = useComputed$(() => NETWORK_CONFIG[activeNetwork.value]);
 
-  const selectedNft = useSignal<Nft | null>(null);
+  // Data state
+  const nfts = useSignal<NftItem[]>([]);
+  const loading = useSignal(false);
+  const errorMsg = useSignal("");
+  const marketData = useSignal<MarketplaceData | null>(null);
+
+  // Search / filter state
   const searchQuery = useSignal("");
+  const selectedCollection = useSignal<string | null>(null);
   const currentPage = useSignal(1);
   const pageSize = 12;
-  const activeTab = useSignal<
-    "explore" | "market" | "claim" | "mint" | "token"
-  >("explore");
-  const selectedCollection = useSignal<string | null>(null);
-  const priceRange = useSignal<[number, number]>([0, 100]);
-  const claimableNfts = useSignal<Nft[]>(nfts.value.slice(0, 8));
-  const claimedNfts = useSignal<Nft[]>([]);
-  const mintedNfts = useSignal<Nft[]>([]);
-  const mintFormData = useSignal<MintFormData>({
-    nftName: "",
-    collectionName: "",
-    description: "",
-    royalty: "5",
+
+  // Tabs
+  const activeTab = useSignal<"explore" | "my-nfts" | "mint">("explore");
+
+  // Modal state
+  const selectedNft = useSignal<NftItem | null>(null);
+  const showOfferModal = useSignal(false);
+  const offerAmount = useSignal("");
+
+  // Signing state
+  const signingStatus = useSignal<"idle" | "signing" | "success" | "error">(
+    "idle",
+  );
+  const signingMessage = useSignal("");
+  const signingQr = useSignal("");
+
+  // Explore address (for browsing other accounts' NFTs)
+  const exploreAddress = useSignal("");
+
+  // Mint form
+  const mintUri = useSignal("");
+  const mintTaxon = useSignal("0");
+  const mintTransferFee = useSignal("0");
+  const mintFlags = useSignal(8); // tfTransferable
+
+  // ── Fetch NFTs ──
+  const fetchNfts = $(async (address: string) => {
+    if (!address) return;
+    loading.value = true;
+    errorMsg.value = "";
+
+    try {
+      const res = await fetch(
+        `/api/marketplace?network=${activeNetwork.value}&address=${address}&limit=100`,
+      );
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(
+          (errData as any).message || `Failed to fetch NFTs (${res.status})`,
+        );
+      }
+
+      const data: MarketplaceData = await res.json();
+      marketData.value = data;
+      nfts.value = data.nfts;
+      currentPage.value = 1;
+    } catch (err: any) {
+      errorMsg.value = err.message || "Failed to fetch NFT data";
+      nfts.value = [];
+      marketData.value = null;
+    } finally {
+      loading.value = false;
+    }
   });
-  const previewImage = useSignal<string>("");
-  const createdTokens = useSignal<Token[]>([]);
-  const tokenFormData = useSignal<TokenFormData>({
-    tokenName: "",
-    tokenSymbol: "",
-    totalSupply: "",
-    decimals: "6",
-    description: "",
+
+  // Auto-fetch when wallet is connected and tab is "my-nfts"
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(({ track }) => {
+    const connected = track(() => wallet.connected.value);
+    const addr = track(() => wallet.address.value);
+    const tab = track(() => activeTab.value);
+    track(() => activeNetwork.value);
+
+    if (connected && addr && tab === "my-nfts") {
+      fetchNfts(addr);
+    }
   });
 
-  const filtered = nfts.value.filter((nft) => {
-    const matchesSearch =
-      nft.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      nft.collection.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      nft.owner.toLowerCase().includes(searchQuery.value.toLowerCase());
+  // ── Sign transaction through the connected wallet ──
+  const signTx = $(async (txjson: Record<string, unknown>) => {
+    if (!wallet.connected.value) {
+      signingStatus.value = "error";
+      signingMessage.value = "Please connect a wallet first";
+      return null;
+    }
 
-    const matchesCollection =
-      !selectedCollection.value || nft.collection === selectedCollection.value;
+    signingStatus.value = "signing";
+    signingMessage.value = `Creating ${String(txjson.TransactionType)} payload...`;
+    signingQr.value = "";
 
-    const price = parseFloat(nft.price);
-    const matchesPrice =
-      price >= priceRange.value[0] && price <= priceRange.value[1];
+    try {
+      // For Xaman wallet, use the API-based signing
+      if (wallet.walletType.value === "xaman" || !wallet.walletType.value) {
+        const payload = await signTransaction(
+          txjson,
+          activeNetwork.value,
+          wallet.address.value,
+        );
 
-    return matchesSearch && matchesCollection && matchesPrice;
+        signingQr.value = payload.refs.qr_png;
+        signingMessage.value = "Scan the QR code with Xaman to sign...";
+
+        const result = await waitForSignature(payload.uuid);
+
+        if (result.meta.signed) {
+          signingStatus.value = "success";
+          signingMessage.value = `✅ Transaction signed! TXID: ${result.response?.txid ?? "N/A"}`;
+          signingQr.value = "";
+          return result;
+        }
+      } else if (wallet.walletType.value === "crossmark") {
+        const { signWithCrossmark } = await import(
+          "~/components/wallets/crossmark"
+        );
+        const result = await signWithCrossmark(txjson);
+        if (result.signed) {
+          signingStatus.value = "success";
+          signingMessage.value = `✅ Transaction signed via Crossmark! Hash: ${result.hash ?? "N/A"}`;
+          return result;
+        }
+      } else if (wallet.walletType.value === "gem") {
+        const { signWithGemWallet } = await import("~/components/wallets/gem");
+        const result = await signWithGemWallet(txjson);
+        if (result.signed) {
+          signingStatus.value = "success";
+          signingMessage.value = `✅ Transaction signed via GemWallet! Hash: ${result.hash ?? "N/A"}`;
+          return result;
+        }
+      }
+
+      return null;
+    } catch (err: any) {
+      signingStatus.value = "error";
+      signingMessage.value = err.message || "Transaction signing failed";
+      signingQr.value = "";
+      return null;
+    }
   });
 
-  const paginated = filtered.slice(
-    (currentPage.value - 1) * pageSize,
-    currentPage.value * pageSize,
+  // ── Buy NFT (accept sell offer) ──
+  const handleBuy = $(async (nft: NftItem, offer: SellOffer) => {
+    const result = await signTx({
+      TransactionType: "NFTokenAcceptOffer",
+      NFTokenSellOffer: offer.index,
+    });
+    if (result) {
+      // Refresh NFTs after successful buy
+      if (wallet.address.value) {
+        setTimeout(() => fetchNfts(wallet.address.value), 3000);
+      }
+    }
+  });
+
+  // ── Make Offer (create buy offer) ──
+  const handleMakeOffer = $(async (nft: NftItem, amountXrp: string) => {
+    if (!amountXrp || parseFloat(amountXrp) <= 0) {
+      signingStatus.value = "error";
+      signingMessage.value = "Please enter a valid offer amount";
+      return;
+    }
+
+    const amountDrops = String(Math.floor(parseFloat(amountXrp) * 1_000_000));
+    const result = await signTx({
+      TransactionType: "NFTokenCreateOffer",
+      NFTokenID: nft.nftokenId,
+      Amount: amountDrops,
+      Owner: nft.owner,
+      Flags: 0, // Buy offer
+    });
+
+    if (result) {
+      showOfferModal.value = false;
+      offerAmount.value = "";
+    }
+  });
+
+  // ── Mint NFT ──
+  const handleMint = $(async () => {
+    if (!mintUri.value) {
+      signingStatus.value = "error";
+      signingMessage.value = "Please provide a URI for the NFT";
+      return;
+    }
+
+    // Convert URI to hex
+    const uriHex = Array.from(new TextEncoder().encode(mintUri.value))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
+
+    const tx: Record<string, unknown> = {
+      TransactionType: "NFTokenMint",
+      URI: uriHex,
+      NFTokenTaxon: parseInt(mintTaxon.value) || 0,
+      Flags: mintFlags.value,
+    };
+
+    const transferFee = parseInt(mintTransferFee.value);
+    if (transferFee > 0 && transferFee <= 50000) {
+      tx.TransferFee = transferFee;
+    }
+
+    const result = await signTx(tx);
+    if (result) {
+      mintUri.value = "";
+      mintTaxon.value = "0";
+      mintTransferFee.value = "0";
+      // Refresh NFTs
+      if (wallet.address.value) {
+        setTimeout(() => fetchNfts(wallet.address.value), 3000);
+      }
+    }
+  });
+
+  // ── Create Sell Offer ──
+  const handleCreateSellOffer = $(async (nft: NftItem, amountXrp: string) => {
+    if (!amountXrp || parseFloat(amountXrp) <= 0) {
+      signingStatus.value = "error";
+      signingMessage.value = "Please enter a valid sale amount";
+      return;
+    }
+
+    const amountDrops = String(Math.floor(parseFloat(amountXrp) * 1_000_000));
+
+    await signTx({
+      TransactionType: "NFTokenCreateOffer",
+      NFTokenID: nft.nftokenId,
+      Amount: amountDrops,
+      Flags: 1, // tfSellNFToken
+    });
+  });
+
+  // ── Explore NFTs ──
+  const handleExplore = $(() => {
+    if (exploreAddress.value.trim()) {
+      fetchNfts(exploreAddress.value.trim());
+    }
+  });
+
+  // Filtered NFTs
+  const filtered = useComputed$(() => {
+    return nfts.value.filter((nft) => {
+      const q = searchQuery.value.toLowerCase();
+      const matchesSearch =
+        !q ||
+        nft.name.toLowerCase().includes(q) ||
+        nft.collection.toLowerCase().includes(q) ||
+        nft.nftokenId.toLowerCase().includes(q) ||
+        nft.issuer.toLowerCase().includes(q);
+
+      const matchesCollection =
+        !selectedCollection.value ||
+        nft.collection === selectedCollection.value;
+
+      return matchesSearch && matchesCollection;
+    });
+  });
+
+  // Paginated NFTs
+  const paginated = useComputed$(() => {
+    const start = (currentPage.value - 1) * pageSize;
+    return filtered.value.slice(start, start + pageSize);
+  });
+
+  // Unique collections
+  const collections = useComputed$(() => {
+    const cols = new Set<string>();
+    nfts.value.forEach((n) => {
+      if (n.collection) cols.add(n.collection);
+    });
+    return Array.from(cols).sort();
+  });
+
+  const totalPages = useComputed$(() =>
+    Math.max(1, Math.ceil(filtered.value.length / pageSize)),
   );
 
-  const Stat = ({ label, value }: { label: string; value: string }) => (
-    <div class="backdrop-blur-md bg-white/30 text-gray-800 px-4 py-3 rounded-2xl text-sm border border-white/40 hover:bg-white/40 transition-all duration-300 shadow-lg">
-      <div class="text-gray-600 text-xs font-medium">{label}</div>
-      <div class="font-bold text-lg mt-1">{value}</div>
-    </div>
+  const nativeCurrency = useComputed$(
+    () => NETWORK_CONFIG[activeNetwork.value].nativeCurrency,
   );
 
   return (
-    <div class="min-h-screen bg-white text-gray-900 mt-24 pb-20">
-      {/* Tabs Section */}
-      <section class="max-w-7xl mx-auto px-6 mt-12">
-        <div class="flex gap-4 border-b border-white/30">
-          <button
-            class={`px-6 py-3 font-semibold transition-all duration-300 ${
-              activeTab.value === "explore"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-600 hover:text-gray-900"
+    <div class="min-h-screen bg-white text-gray-900 mt-20 pb-20">
+      {/* Signing Status Overlay */}
+      {signingStatus.value !== "idle" && (
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div
+            class={`max-w-md w-full mx-4 rounded-2xl border p-6 shadow-2xl bg-white ${
+              signingStatus.value === "success"
+                ? "border-green-300"
+                : signingStatus.value === "error"
+                  ? "border-red-300"
+                  : "border-blue-300"
             }`}
-            onClick$={() => {
-              activeTab.value = "explore";
-              currentPage.value = 1;
-            }}
           >
-            Explore Features
-          </button>
-          <button
-            class={`px-6 py-3 font-semibold transition-all duration-300 ${
-              activeTab.value === "market"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-            onClick$={() => {
-              activeTab.value = "market";
-              currentPage.value = 1;
-            }}
-          >
-            Market
-          </button>
-          <button
-            class={`px-6 py-3 font-semibold transition-all duration-300 ${
-              activeTab.value === "claim"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-            onClick$={() => {
-              activeTab.value = "claim";
-              currentPage.value = 1;
-            }}
-          >
-            Claim NFTs
-          </button>
-          <button
-            class={`px-6 py-3 font-semibold transition-all duration-300 ${
-              activeTab.value === "mint"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-            onClick$={() => {
-              activeTab.value = "mint";
-              currentPage.value = 1;
-            }}
-          >
-            Mint NFT
-          </button>
-          <button
-            class={`px-6 py-3 font-semibold transition-all duration-300 ${
-              activeTab.value === "token"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-            onClick$={() => {
-              activeTab.value = "token";
-              currentPage.value = 1;
-            }}
-          >
-            Create Token
-          </button>
-        </div>
-
-        {/* Explore Tab */}
-        {activeTab.value === "explore" && (
-          <div class="mt-8">
-            {/* Search */}
-            <div class="flex gap-4 mb-8">
-              <div class="flex-1 relative group">
-                <input
-                  type="text"
-                  placeholder="Search NFTs, collections, owners..."
-                  class="w-full rounded-2xl backdrop-blur-md bg-white/40 border border-white/60 px-5 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/60 transition-all duration-300 shadow-lg"
-                  value={searchQuery.value}
-                  onInput$={(e) =>
-                    (searchQuery.value = (e.target as HTMLInputElement).value)
-                  }
-                />
-              </div>
-            </div>
-
-            {/* Featured Hero - Bento Box */}
-            <section class="max-w-7xl mx-auto px-6 mt-8">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-max">
-                {/* Hero Section - Large Box */}
-                <div class="md:col-span-2 rounded-3xl backdrop-blur-xl bg-linear-to-br from-blue-50/60 via-white/40 to-purple-50/60 border border-white/50 shadow-2xl p-8 md:p-12">
-                  <h1 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-                    Discover Xahau NFTs
-                  </h1>
-                  <p class="mt-4 text-gray-700 max-w-lg text-lg">
-                    Explore premium digital collections on the XRP Ledger's
-                    innovative Xahau sidechain. Trade, collect, and invest in
-                    the future.
-                  </p>
-                  <div class="flex flex-wrap gap-3 mt-6">
-                    <Stat label="Floor Price" value="4.38 XRP" />
-                    <Stat label="Total Items" value="8,888" />
-                    <Stat label="Volume" value="505K XRP" />
-                    <Stat label="Listed" value="2.7%" />
-                  </div>
-                </div>
-
-                {/* Featured NFT - Side Box */}
-                <div class="rounded-3xl overflow-hidden shadow-2xl border border-white/40 backdrop-blur-sm">
+            <div class="flex flex-col items-center text-center">
+              {signingQr.value && (
+                <div class="mb-4 bg-white rounded-xl p-3 shadow">
                   <img
-                    src={nfts.value[0].image}
-                    class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                    alt="Featured NFT"
-                    width={400}
-                    height={400}
-                    loading="lazy"
+                    src={signingQr.value}
+                    alt="Scan with Xaman"
+                    width={200}
+                    height={200}
+                    class="w-48 h-48"
                   />
                 </div>
+              )}
+              <div class="text-3xl mb-3">
+                {signingStatus.value === "signing" && "⏳"}
+                {signingStatus.value === "success" && "✅"}
+                {signingStatus.value === "error" && "❌"}
+              </div>
+              <h3
+                class={`font-bold text-lg mb-2 ${
+                  signingStatus.value === "success"
+                    ? "text-green-700"
+                    : signingStatus.value === "error"
+                      ? "text-red-700"
+                      : "text-blue-700"
+                }`}
+              >
+                {signingStatus.value === "signing" && "Awaiting Signature..."}
+                {signingStatus.value === "success" && "Transaction Signed!"}
+                {signingStatus.value === "error" && "Transaction Failed"}
+              </h3>
+              <p class="text-sm text-gray-600 break-all">
+                {signingMessage.value}
+              </p>
+              {signingStatus.value !== "signing" && (
+                <button
+                  class="mt-4 px-6 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition"
+                  onClick$={() => {
+                    signingStatus.value = "idle";
+                    signingMessage.value = "";
+                    signingQr.value = "";
+                  }}
+                >
+                  Dismiss
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-                {/* Top Movers - Box */}
-                <div class="md:col-span-1 rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-6 shadow-xl">
-                  <h3 class="text-xl font-bold text-gray-900 mb-4">
-                    📈 Top Movers
-                  </h3>
-                  <div class="space-y-3">
-                    {nfts.value.slice(0, 3).map((nft) => (
-                      <div
-                        key={nft.id}
-                        class="flex items-center gap-3 p-3 rounded-xl hover:bg-white/40 transition-all duration-200 cursor-pointer"
-                        onClick$={() => (selectedNft.value = nft)}
-                      >
-                        <img
-                          src={nft.image}
-                          class="w-12 h-12 rounded-lg object-cover"
-                          height={50}
-                          width={50}
-                          loading="lazy"
-                        />
-                        <div class="flex-1 min-w-0">
-                          <p class="font-semibold text-sm text-gray-900 truncate">
-                            {nft.name}
-                          </p>
-                          <p class="text-xs text-blue-600 font-medium">
-                            +{(Math.random() * 25).toFixed(2)}%
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+      {/* NFT Detail Modal */}
+      {selectedNft.value && (
+        <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div class="max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-200 shadow-2xl">
+            <div class="relative">
+              <button
+                class="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 text-gray-700 hover:bg-white transition shadow"
+                onClick$={() => {
+                  selectedNft.value = null;
+                  showOfferModal.value = false;
+                  offerAmount.value = "";
+                }}
+              >
+                ✕
+              </button>
+              <img
+                src={selectedNft.value.image || PLACEHOLDER_IMG}
+                alt={selectedNft.value.name}
+                width={600}
+                height={600}
+                class="w-full aspect-square object-cover"
+                onError$={(e: any) => {
+                  e.target.src = PLACEHOLDER_IMG;
+                }}
+              />
+            </div>
+            <div class="p-6">
+              <h2 class="text-2xl font-bold text-gray-900">
+                {selectedNft.value.name}
+              </h2>
+              {selectedNft.value.collection && (
+                <p class="text-sm text-blue-600 font-medium mt-1">
+                  {selectedNft.value.collection}
+                </p>
+              )}
+              {selectedNft.value.description && (
+                <p class="text-sm text-gray-600 mt-2">
+                  {selectedNft.value.description}
+                </p>
+              )}
+
+              <div class="grid grid-cols-2 gap-3 mt-4">
+                <div class="bg-gray-50 rounded-xl p-3">
+                  <div class="text-xs text-gray-500">Owner</div>
+                  <div class="text-sm font-mono font-medium truncate">
+                    {truncateAddress(selectedNft.value.owner)}
                   </div>
                 </div>
-
-                {/* Trending Collections - Box */}
-                <div class="md:col-span-2 rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-6 shadow-xl">
-                  <h3 class="text-xl font-bold text-gray-900 mb-4">
-                    🔥 Trending Collections
-                  </h3>
-                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div
-                        key={i}
-                        class="rounded-2xl backdrop-blur-sm bg-white/40 border border-white/50 p-4 hover:bg-white/60 transition-all duration-300 cursor-pointer group text-center"
-                      >
-                        <img
-                          src={`https://picsum.photos/seed/collection${i}/100/100`}
-                          class="w-16 h-16 rounded-xl object-cover group-hover:scale-110 transition-transform duration-300 mx-auto mb-2"
-                          height={100}
-                          width={100}
-                          loading="lazy"
-                        />
-                        <p class="font-bold text-sm text-gray-900">
-                          Collection {i}
-                        </p>
-                        <p class="text-xs text-gray-600 mt-1">
-                          Floor: {(i * 2.3).toFixed(2)} XRP
-                        </p>
-                      </div>
-                    ))}
+                <div class="bg-gray-50 rounded-xl p-3">
+                  <div class="text-xs text-gray-500">Issuer</div>
+                  <div class="text-sm font-mono font-medium truncate">
+                    {truncateAddress(selectedNft.value.issuer)}
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-3">
+                  <div class="text-xs text-gray-500">Transfer Fee</div>
+                  <div class="text-sm font-medium">
+                    {selectedNft.value.transferFee}%
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-3">
+                  <div class="text-xs text-gray-500">Taxon</div>
+                  <div class="text-sm font-medium">
+                    {selectedNft.value.taxon}
                   </div>
                 </div>
               </div>
-            </section>
-          </div>
-        )}
 
-        {/* Market Tab */}
-        {activeTab.value === "market" && (
-          <div class="mt-8">
-            {/* Search and Filters */}
-            <div class="flex flex-col lg:flex-row gap-6 mb-8">
-              {/* Search */}
-              <div class="flex-1">
+              <div class="mt-3 bg-gray-50 rounded-xl p-3">
+                <div class="text-xs text-gray-500 mb-1">NFToken ID</div>
+                <div class="text-xs font-mono break-all text-gray-700">
+                  {selectedNft.value.nftokenId}
+                </div>
+              </div>
+
+              {/* Sell Offers */}
+              {selectedNft.value.sellOffers.length > 0 && (
+                <div class="mt-4">
+                  <h3 class="text-sm font-bold text-gray-700 mb-2">
+                    Sell Offers ({selectedNft.value.sellOffers.length})
+                  </h3>
+                  <div class="space-y-2 max-h-40 overflow-y-auto">
+                    {selectedNft.value.sellOffers.map((offer) => (
+                      <div
+                        key={offer.index}
+                        class="flex items-center justify-between bg-green-50 rounded-lg p-3"
+                      >
+                        <div>
+                          <div class="text-sm font-semibold text-green-700">
+                            {formatAmount(offer.amount, nativeCurrency.value)}
+                          </div>
+                          <div class="text-xs text-gray-500">
+                            by {truncateAddress(offer.owner)}
+                          </div>
+                        </div>
+                        {wallet.connected.value &&
+                          offer.owner !== wallet.address.value && (
+                            <button
+                              class="px-4 py-1.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
+                              onClick$={() =>
+                                handleBuy(selectedNft.value!, offer)
+                              }
+                            >
+                              Buy Now
+                            </button>
+                          )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Buy Offers */}
+              {selectedNft.value.buyOffers.length > 0 && (
+                <div class="mt-4">
+                  <h3 class="text-sm font-bold text-gray-700 mb-2">
+                    Buy Offers ({selectedNft.value.buyOffers.length})
+                  </h3>
+                  <div class="space-y-2 max-h-40 overflow-y-auto">
+                    {selectedNft.value.buyOffers.map((offer) => (
+                      <div
+                        key={offer.index}
+                        class="flex items-center justify-between bg-blue-50 rounded-lg p-3"
+                      >
+                        <div>
+                          <div class="text-sm font-semibold text-blue-700">
+                            {formatAmount(offer.amount, nativeCurrency.value)}
+                          </div>
+                          <div class="text-xs text-gray-500">
+                            by {truncateAddress(offer.owner)}
+                          </div>
+                        </div>
+                        {/* Owner can accept buy offers */}
+                        {wallet.connected.value &&
+                          selectedNft.value?.owner === wallet.address.value && (
+                            <button
+                              class="px-4 py-1.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
+                              onClick$={() =>
+                                signTx({
+                                  TransactionType: "NFTokenAcceptOffer",
+                                  NFTokenBuyOffer: offer.index,
+                                })
+                              }
+                            >
+                              Accept Offer
+                            </button>
+                          )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div class="flex gap-3 mt-6">
+                {/* Buy cheapest sell offer */}
+                {selectedNft.value.sellOffers.length > 0 &&
+                  wallet.connected.value &&
+                  selectedNft.value.owner !== wallet.address.value && (
+                    <button
+                      class="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition shadow-lg"
+                      onClick$={() => {
+                        const cheapest = selectedNft.value!.sellOffers.reduce(
+                          (min, o) => {
+                            const val =
+                              typeof o.amount === "string"
+                                ? Number(o.amount)
+                                : Number(o.amount.value);
+                            const minVal =
+                              typeof min.amount === "string"
+                                ? Number(min.amount)
+                                : Number(min.amount.value);
+                            return val < minVal ? o : min;
+                          },
+                          selectedNft.value!.sellOffers[0],
+                        );
+                        handleBuy(selectedNft.value!, cheapest);
+                      }}
+                    >
+                      🛒 Buy for{" "}
+                      {getLowestSellPrice(
+                        selectedNft.value.sellOffers,
+                        nativeCurrency.value,
+                      )}
+                    </button>
+                  )}
+
+                {/* Make offer on someone else's NFT */}
+                {wallet.connected.value &&
+                  selectedNft.value.owner !== wallet.address.value && (
+                    <button
+                      class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg"
+                      onClick$={() => (showOfferModal.value = true)}
+                    >
+                      💰 Make Offer
+                    </button>
+                  )}
+
+                {/* Owner: Create sell offer */}
+                {wallet.connected.value &&
+                  selectedNft.value.owner === wallet.address.value && (
+                    <button
+                      class="flex-1 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition shadow-lg"
+                      onClick$={() => (showOfferModal.value = true)}
+                    >
+                      📤 List for Sale
+                    </button>
+                  )}
+
+                {!wallet.connected.value && (
+                  <div class="flex-1 py-3 bg-gray-100 text-gray-500 font-bold rounded-xl text-center">
+                    Connect wallet to trade
+                  </div>
+                )}
+              </div>
+
+              {/* Make Offer / List for Sale Form */}
+              {showOfferModal.value && (
+                <div class="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <h3 class="text-sm font-bold text-gray-700 mb-3">
+                    {selectedNft.value?.owner === wallet.address.value
+                      ? "Set Sale Price"
+                      : "Make an Offer"}
+                  </h3>
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.000001"
+                      min="0"
+                      placeholder={`Amount in ${nativeCurrency.value}`}
+                      class="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={offerAmount.value}
+                      onInput$={(e) =>
+                        (offerAmount.value = (
+                          e.target as HTMLInputElement
+                        ).value)
+                      }
+                    />
+                    <button
+                      class="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-sm disabled:opacity-50"
+                      disabled={!offerAmount.value}
+                      onClick$={() => {
+                        if (selectedNft.value?.owner === wallet.address.value) {
+                          handleCreateSellOffer(
+                            selectedNft.value!,
+                            offerAmount.value,
+                          );
+                        } else {
+                          handleMakeOffer(
+                            selectedNft.value!,
+                            offerAmount.value,
+                          );
+                        }
+                      }}
+                    >
+                      {selectedNft.value?.owner === wallet.address.value
+                        ? "List"
+                        : "Offer"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <section class="max-w-7xl mx-auto px-6 pt-8">
+        {/* Tab Bar */}
+        <div class="flex gap-1 border-b border-gray-200 mb-8">
+          {(
+            [
+              { id: "explore", label: "🔍 Explore NFTs", always: true },
+              {
+                id: "my-nfts",
+                label: "🖼️ My NFTs",
+                always: false,
+              },
+              { id: "mint", label: "✨ Mint NFT", always: false },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              class={`px-6 py-3 font-semibold text-sm transition-all whitespace-nowrap border-b-2 ${
+                activeTab.value === tab.id
+                  ? "text-blue-600 border-blue-600"
+                  : "text-gray-500 border-transparent hover:text-gray-800"
+              } ${!tab.always && !wallet.connected.value ? "opacity-40 cursor-not-allowed" : ""}`}
+              onClick$={() => {
+                if (!tab.always && !wallet.connected.value) return;
+                activeTab.value = tab.id;
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── EXPLORE TAB ── */}
+        {activeTab.value === "explore" && (
+          <div>
+            {/* Search by address */}
+            <div class="rounded-2xl bg-gradient-to-br from-blue-50 via-white to-purple-50 border border-gray-200 p-8 mb-8 shadow-sm">
+              <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                NFT Marketplace
+              </h1>
+              <p class="text-gray-600 mb-6">
+                Browse NFTs on the{" "}
+                <span
+                  class="font-semibold"
+                  style={{ color: networkConfig.value.color }}
+                >
+                  {networkConfig.value.label}
+                </span>
+                . Enter any r-address to explore their collection.
+              </p>
+              <div class="flex gap-3">
                 <input
                   type="text"
-                  placeholder="Search NFTs..."
-                  class="w-full rounded-2xl backdrop-blur-md bg-white/40 border border-white/60 px-5 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white/60 transition-all duration-300 shadow-lg"
+                  placeholder="Enter r-address to explore NFTs..."
+                  class="flex-1 rounded-xl border border-gray-300 px-5 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+                  value={exploreAddress.value}
+                  onInput$={(e) =>
+                    (exploreAddress.value = (
+                      e.target as HTMLInputElement
+                    ).value)
+                  }
+                  onKeyDown$={(e) => {
+                    if (e.key === "Enter") handleExplore();
+                  }}
+                />
+                <button
+                  class="px-8 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+                  disabled={loading.value || !exploreAddress.value.trim()}
+                  onClick$={handleExplore}
+                >
+                  {loading.value ? "Loading..." : "Explore"}
+                </button>
+              </div>
+              {wallet.connected.value && (
+                <button
+                  class="mt-3 text-sm text-blue-600 hover:underline"
+                  onClick$={() => {
+                    exploreAddress.value = wallet.address.value;
+                    fetchNfts(wallet.address.value);
+                  }}
+                >
+                  Use my address: {truncateAddress(wallet.address.value)}
+                </button>
+              )}
+            </div>
+
+            {/* Error */}
+            {errorMsg.value && (
+              <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                {errorMsg.value}
+              </div>
+            )}
+
+            {/* Live Stats */}
+            {marketData.value && (
+              <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <div class="text-xs text-gray-500 font-medium">
+                    Total NFTs
+                  </div>
+                  <div class="text-2xl font-bold text-gray-900 mt-1">
+                    {marketData.value.totalNfts}
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <div class="text-xs text-gray-500 font-medium">Listed</div>
+                  <div class="text-2xl font-bold text-green-600 mt-1">
+                    {marketData.value.listedCount}
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <div class="text-xs text-gray-500 font-medium">
+                    Sell Offers
+                  </div>
+                  <div class="text-2xl font-bold text-blue-600 mt-1">
+                    {marketData.value.totalSellOffers}
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <div class="text-xs text-gray-500 font-medium">
+                    Buy Offers
+                  </div>
+                  <div class="text-2xl font-bold text-purple-600 mt-1">
+                    {marketData.value.totalBuyOffers}
+                  </div>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <div class="text-xs text-gray-500 font-medium">Balance</div>
+                  <div class="text-2xl font-bold text-gray-900 mt-1">
+                    {parseFloat(marketData.value.balance).toFixed(2)}{" "}
+                    <span class="text-sm font-normal">
+                      {nativeCurrency.value}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filters */}
+            {nfts.value.length > 0 && (
+              <div class="flex flex-col sm:flex-row gap-3 mb-6">
+                <input
+                  type="text"
+                  placeholder="Filter by name, collection, ID..."
+                  class="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   value={searchQuery.value}
                   onInput$={(e) =>
                     (searchQuery.value = (e.target as HTMLInputElement).value)
                   }
                 />
-              </div>
-
-              {/* Filter Sidebar */}
-              <div class="flex flex-col sm:flex-row gap-1 flex-wrap lg:flex-nowrap">
-                {/* Collection Filter */}
-                <div class=" min-w-48 rounded-2xl backdrop-blur-md bg-white/40 border border-white/50 p-4">
+                {collections.value.length > 0 && (
                   <select
-                    class="w-full rounded-lg bg-white/40 border border-white/50 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                     value={selectedCollection.value || ""}
                     onChange$={(e) =>
                       (selectedCollection.value =
@@ -325,1012 +900,577 @@ export default component$(() => {
                     }
                   >
                     <option value="">All Collections</option>
-                    {Array.from({ length: 4 }, (_, i) => (
-                      <option key={i} value={`Collection ${i + 1}`}>
-                        {`Collection ${i + 1}`}
+                    {collections.value.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* Price Range Filter */}
-                <div class="flex-1 min-w-48 rounded-2xl backdrop-blur-md bg-white/40 border border-white/50 p-4">
-                  <div class="space-y-2">
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={priceRange.value[0]}
-                        onInput$={(e) =>
-                          (priceRange.value = [
-                            parseFloat((e.target as HTMLInputElement).value),
-                            priceRange.value[1],
-                          ])
-                        }
-                        class="w-full h-2 bg-white/30 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                    <div class="flex gap-2 text-xs text-gray-700">
-                      <span>{priceRange.value[0]} XRP</span>
-                      <span>-</span>
-                      <span>{priceRange.value[1]} XRP</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Clear Filters */}
-                <button
-                  class="px-6 py-2 backdrop-blur-md bg-transparent border border-white/50 text-gray-900 text-sm font-medium hover:bg-white/60 transition-all duration-300 rounded-full"
-                  onClick$={() => {
-                    selectedCollection.value = null;
-                    priceRange.value = [0, 100];
-                    searchQuery.value = "";
-                  }}
-                >
-                  Clear Filters
-                </button>
+                )}
+                {(searchQuery.value || selectedCollection.value) && (
+                  <button
+                    class="px-4 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition"
+                    onClick$={() => {
+                      searchQuery.value = "";
+                      selectedCollection.value = null;
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-            </div>
+            )}
+
+            {/* Loading */}
+            {loading.value && (
+              <div class="flex items-center justify-center py-20">
+                <div class="animate-spin w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full" />
+                <span class="ml-4 text-gray-500">
+                  Fetching NFTs from the ledger...
+                </span>
+              </div>
+            )}
 
             {/* NFT Grid */}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {paginated.length > 0 ? (
-                paginated.map((nft) => (
-                  <div
-                    key={nft.id}
-                    class="group rounded-2xl overflow-hidden backdrop-blur-md bg-white/40 border border-white/50 hover:border-blue-400/50 hover:bg-white/60 hover:shadow-2xl transition-all duration-300 cursor-pointer hover:-translate-y-1"
-                    onClick$={() => (selectedNft.value = nft)}
-                  >
-                    <div class="relative aspect-square overflow-hidden bg-linear-to-br from-gray-100 to-gray-50">
-                      <img
-                        src={nft.image}
-                        alt={nft.name}
-                        height={400}
-                        width={400}
-                        class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      />
-                      <div class="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            {!loading.value && paginated.value.length > 0 && (
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginated.value.map((nft) => {
+                  const price = getLowestSellPrice(
+                    nft.sellOffers,
+                    nativeCurrency.value,
+                  );
+                  const bestOffer = getHighestBuyPrice(
+                    nft.buyOffers,
+                    nativeCurrency.value,
+                  );
+                  return (
+                    <div
+                      key={nft.nftokenId}
+                      class="group rounded-2xl overflow-hidden bg-white border border-gray-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300 cursor-pointer hover:-translate-y-1"
+                      onClick$={() => (selectedNft.value = nft)}
+                    >
+                      <div class="relative aspect-square overflow-hidden bg-gray-100">
+                        <img
+                          src={nft.image || PLACEHOLDER_IMG}
+                          alt={nft.name}
+                          width={400}
+                          height={400}
+                          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          loading="lazy"
+                          onError$={(e: any) => {
+                            e.target.src = PLACEHOLDER_IMG;
+                          }}
+                        />
+                        {nft.sellOffers.length > 0 && (
+                          <div class="absolute top-3 left-3 bg-green-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                            FOR SALE
+                          </div>
+                        )}
+                        {nft.buyOffers.length > 0 && (
+                          <div class="absolute top-3 right-3 bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                            {nft.buyOffers.length} offer
+                            {nft.buyOffers.length > 1 ? "s" : ""}
+                          </div>
+                        )}
+                      </div>
+                      <div class="p-4">
+                        <h3 class="font-bold text-gray-900 truncate">
+                          {nft.name}
+                        </h3>
+                        {nft.collection && (
+                          <p class="text-xs text-blue-600 font-medium mt-0.5 truncate">
+                            {nft.collection}
+                          </p>
+                        )}
+                        <div class="flex items-center justify-between mt-3">
+                          <div>
+                            {price ? (
+                              <div>
+                                <div class="text-xs text-gray-500">Price</div>
+                                <div class="text-sm font-bold text-green-700">
+                                  {price}
+                                </div>
+                              </div>
+                            ) : (
+                              <div class="text-xs text-gray-400">
+                                Not listed
+                              </div>
+                            )}
+                          </div>
+                          {bestOffer && (
+                            <div class="text-right">
+                              <div class="text-xs text-gray-500">
+                                Best Offer
+                              </div>
+                              <div class="text-sm font-bold text-blue-700">
+                                {bestOffer}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div class="flex gap-2 mt-3">
+                          {nft.sellOffers.length > 0 &&
+                            wallet.connected.value &&
+                            nft.owner !== wallet.address.value && (
+                              <button
+                                class="flex-1 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition"
+                                onClick$={(e) => {
+                                  e.stopPropagation();
+                                  const cheapest = nft.sellOffers.reduce(
+                                    (min, o) => {
+                                      const val =
+                                        typeof o.amount === "string"
+                                          ? Number(o.amount)
+                                          : Number(o.amount.value);
+                                      const minVal =
+                                        typeof min.amount === "string"
+                                          ? Number(min.amount)
+                                          : Number(min.amount.value);
+                                      return val < minVal ? o : min;
+                                    },
+                                    nft.sellOffers[0],
+                                  );
+                                  handleBuy(nft, cheapest);
+                                }}
+                              >
+                                Buy
+                              </button>
+                            )}
+                          {wallet.connected.value &&
+                            nft.owner !== wallet.address.value && (
+                              <button
+                                class="flex-1 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition"
+                                onClick$={(e) => {
+                                  e.stopPropagation();
+                                  selectedNft.value = nft;
+                                  showOfferModal.value = true;
+                                }}
+                              >
+                                Make Offer
+                              </button>
+                            )}
+                        </div>
+                      </div>
                     </div>
-                    <div class="p-5">
-                      <h3 class="font-bold text-lg text-gray-900 truncate">
-                        {nft.name}
-                      </h3>
-                      <p class="text-sm text-blue-600 truncate font-medium mt-1">
-                        {nft.collection}
-                      </p>
-                      <p class="text-xs text-gray-700 mt-2">
-                        Owner: {nft.owner}
-                      </p>
-                      <p class="text-xs text-gray-600 font-semibold mt-1">
-                        {nft.price}
-                      </p>
-                      <p class="text-xs text-gray-600">Last: {nft.lastSale}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div class="col-span-full text-center py-12">
-                  <p class="text-gray-600 text-lg">
-                    No NFTs found matching your filters
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!loading.value &&
+              nfts.value.length === 0 &&
+              marketData.value === null && (
+                <div class="text-center py-20 text-gray-400">
+                  <div class="text-6xl mb-4">🖼️</div>
+                  <p class="text-lg">
+                    Enter an r-address above to explore NFTs
                   </p>
                 </div>
               )}
-            </div>
+
+            {!loading.value &&
+              nfts.value.length === 0 &&
+              marketData.value !== null && (
+                <div class="text-center py-20 text-gray-400">
+                  <div class="text-6xl mb-4">📭</div>
+                  <p class="text-lg">This account has no NFTs</p>
+                </div>
+              )}
 
             {/* Pagination */}
-            {filtered.length > pageSize && (
-              <div class="flex justify-center gap-4 mt-12">
+            {totalPages.value > 1 && (
+              <div class="flex justify-center items-center gap-4 mt-10">
                 <button
-                  class="px-4 py-2 backdrop-blur-md bg-white/40 border border-white/50 rounded-xl text-gray-900 font-medium hover:bg-white/60 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                  class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   disabled={currentPage.value <= 1}
                   onClick$={() => currentPage.value--}
                 >
-                  Previous
+                  ← Previous
                 </button>
-                <span class="px-4 py-2 font-semibold text-gray-900">
-                  {currentPage.value} of {Math.ceil(filtered.length / pageSize)}
+                <span class="text-sm font-semibold text-gray-700">
+                  {currentPage.value} / {totalPages.value}
                 </span>
                 <button
-                  class="px-4 py-2 backdrop-blur-md bg-white/40 border border-white/50 rounded-xl text-gray-900 font-medium hover:bg-white/60 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
-                  disabled={currentPage.value * pageSize >= filtered.length}
+                  class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={currentPage.value >= totalPages.value}
                   onClick$={() => currentPage.value++}
                 >
-                  Next
+                  Next →
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* Claim Tab */}
-        {activeTab.value === "claim" && (
-          <div class="mt-8">
-            {/* Claim Header */}
-            <div class="rounded-3xl backdrop-blur-xl bg-linear-to-br from-green-50/60 via-white/40 to-emerald-50/60 border border-white/50 shadow-2xl p-8 md:p-12 mb-8">
-              <h1 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-                🎁 Claim Your NFTs
-              </h1>
-              <p class="mt-4 text-gray-700 max-w-lg text-lg">
-                You have {claimableNfts.value.length} NFTs available to claim.
-                Click on any NFT below and claim it to add it to your wallet.
-              </p>
-              <div class="flex flex-wrap gap-3 mt-6">
-                <Stat
-                  label="Claimable NFTs"
-                  value={claimableNfts.value.length.toString()}
-                />
-                <Stat
-                  label="Already Claimed"
-                  value={claimedNfts.value.length.toString()}
-                />
-                <Stat
-                  label="Total Available"
-                  value={(
-                    claimableNfts.value.length + claimedNfts.value.length
-                  ).toString()}
-                />
+        {/* ── MY NFTS TAB ── */}
+        {activeTab.value === "my-nfts" && (
+          <div>
+            {!wallet.connected.value ? (
+              <div class="text-center py-20 text-gray-400">
+                <div class="text-6xl mb-4">🔒</div>
+                <p class="text-lg">Connect your wallet to view your NFTs</p>
               </div>
-            </div>
-
-            {/* Tabs for Claimable and Claimed */}
-            <div class="flex gap-4 border-b border-white/30 mb-8">
-              <button
-                class={`px-6 py-3 font-semibold transition-all duration-300 ${
-                  currentPage.value === 1
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-                onClick$={() => (currentPage.value = 1)}
-              >
-                Available ({claimableNfts.value.length})
-              </button>
-              <button
-                class={`px-6 py-3 font-semibold transition-all duration-300 ${
-                  currentPage.value === 2
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-                onClick$={() => (currentPage.value = 2)}
-              >
-                Claimed ({claimedNfts.value.length})
-              </button>
-            </div>
-
-            {/* Claimable NFTs Grid */}
-            {currentPage.value === 1 && (
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {claimableNfts.value.length > 0 ? (
-                  claimableNfts.value.map((nft) => (
-                    <div
-                      key={nft.id}
-                      class="group rounded-2xl overflow-hidden backdrop-blur-md bg-white/40 border border-white/50 hover:border-green-400/50 hover:bg-white/60 hover:shadow-2xl transition-all duration-300 cursor-pointer hover:-translate-y-1"
-                    >
-                      <div class="relative aspect-square overflow-hidden bg-linear-to-br from-gray-100 to-gray-50">
-                        <img
-                          src={nft.image}
-                          alt={nft.name}
-                          height={400}
-                          width={400}
-                          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        />
-                        <div class="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            ) : (
+              <div>
+                {/* My Stats */}
+                {marketData.value && (
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-gradient-to-br from-blue-50 to-white rounded-xl p-5 border border-blue-100">
+                      <div class="text-xs text-blue-600 font-medium">
+                        My NFTs
                       </div>
-                      <div class="p-5">
-                        <h3 class="font-bold text-lg text-gray-900 truncate">
-                          {nft.name}
-                        </h3>
-                        <p class="text-sm text-green-600 truncate font-medium mt-1">
-                          {nft.collection}
-                        </p>
-                        <p class="text-xs text-gray-700 mt-3">Ready to claim</p>
-                        <button
-                          class="w-full mt-3 px-4 py-2 backdrop-blur-md bg-linear-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 font-semibold text-sm"
-                          onClick$={() => {
-                            claimableNfts.value = claimableNfts.value.filter(
-                              (n) => n.id !== nft.id,
-                            );
-                            claimedNfts.value = [...claimedNfts.value, nft];
-                          }}
-                        >
-                          ✓ Claim NFT
-                        </button>
+                      <div class="text-3xl font-bold text-gray-900 mt-1">
+                        {marketData.value.totalNfts}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div class="col-span-full text-center py-12">
-                    <p class="text-gray-600 text-lg">
-                      No NFTs available to claim
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Claimed NFTs Grid */}
-            {currentPage.value === 2 && (
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {claimedNfts.value.length > 0 ? (
-                  claimedNfts.value.map((nft) => (
-                    <div
-                      key={nft.id}
-                      class="group rounded-2xl overflow-hidden backdrop-blur-md bg-white/40 border border-green-400/50 hover:bg-white/60 hover:shadow-2xl transition-all duration-300"
-                    >
-                      <div class="relative aspect-square overflow-hidden bg-linear-to-br from-gray-100 to-gray-50">
-                        <img
-                          src={nft.image}
-                          alt={nft.name}
-                          height={400}
-                          width={400}
-                          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        />
-                        <div class="absolute top-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
-                          ✓ Claimed
-                        </div>
-                        <div class="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div class="bg-gradient-to-br from-green-50 to-white rounded-xl p-5 border border-green-100">
+                      <div class="text-xs text-green-600 font-medium">
+                        Listed
                       </div>
-                      <div class="p-5">
-                        <h3 class="font-bold text-lg text-gray-900 truncate">
-                          {nft.name}
-                        </h3>
-                        <p class="text-sm text-green-600 truncate font-medium mt-1">
-                          {nft.collection}
-                        </p>
-                        <p class="text-xs text-gray-700 mt-3">In your wallet</p>
-                        <button
-                          class="w-full mt-3 px-4 py-2 backdrop-blur-md bg-white/40 border border-white/50 text-gray-900 rounded-xl hover:bg-white/60 transition-all duration-300 font-semibold text-sm"
-                          onClick$={() => (selectedNft.value = nft)}
-                        >
-                          View Details
-                        </button>
+                      <div class="text-3xl font-bold text-gray-900 mt-1">
+                        {marketData.value.listedCount}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div class="col-span-full text-center py-12">
-                    <p class="text-gray-600 text-lg">
-                      You haven't claimed any NFTs yet
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Mint Tab */}
-        {activeTab.value === "mint" && (
-          <div class="mt-8">
-            {/* Mint Header */}
-            <div class="rounded-3xl backdrop-blur-xl bg-linear-to-br from-purple-50/60 via-white/40 to-pink-50/60 border border-white/50 shadow-2xl p-8 md:p-12 mb-8">
-              <h1 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-                ✨ Create Your NFT
-              </h1>
-              <p class="mt-4 text-gray-700 max-w-lg text-lg">
-                Mint unique digital assets on the Xahau sidechain. Define your
-                collection, set royalties, and launch your NFT to the world.
-              </p>
-              <div class="flex flex-wrap gap-3 mt-6">
-                <Stat
-                  label="NFTs Minted"
-                  value={mintedNfts.value.length.toString()}
-                />
-                <Stat label="Mint Fee" value="0.5 XRP" />
-                <Stat label="Max Royalty" value="50%" />
-              </div>
-            </div>
-
-            {/* Mint Form and Preview */}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Form Section */}
-              <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
-                <h2 class="text-2xl font-bold text-gray-900 mb-6">
-                  Mint Details
-                </h2>
-
-                {/* Mint Type Tabs */}
-                <div class="flex gap-4 border-b border-white/30 mb-8">
-                  <button
-                    class={`px-4 py-2 font-semibold transition-all duration-300 ${
-                      mintFormData.value.nftName === "single" ||
-                      !mintFormData.value.nftName
-                        ? "text-purple-600 border-b-2 border-purple-600"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                    onClick$={() => {
-                      mintFormData.value = {
-                        nftName: "single",
-                        collectionName: "",
-                        description: "",
-                        royalty: "5",
-                      };
-                    }}
-                  >
-                    Single NFT
-                  </button>
-                  <button
-                    class={`px-4 py-2 font-semibold transition-all duration-300 ${
-                      mintFormData.value.nftName === "collection"
-                        ? "text-purple-600 border-b-2 border-purple-600"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                    onClick$={() => {
-                      mintFormData.value = {
-                        nftName: "collection",
-                        collectionName: "",
-                        description: "",
-                        royalty: "5",
-                      };
-                    }}
-                  >
-                    Collection
-                  </button>
-                </div>
-
-                {/* Single NFT Form */}
-                {mintFormData.value.nftName !== "collection" && (
-                  <div class="space-y-6">
-                    {/* NFT Name */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        NFT Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g., Xahau Legends #001"
-                        class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300"
-                        value={
-                          mintFormData.value.nftName === "single"
-                            ? ""
-                            : mintFormData.value.nftName
-                        }
-                        onInput$={(e) =>
-                          (mintFormData.value.nftName = (
-                            e.target as HTMLInputElement
-                          ).value)
-                        }
-                      />
+                    <div class="bg-gradient-to-br from-purple-50 to-white rounded-xl p-5 border border-purple-100">
+                      <div class="text-xs text-purple-600 font-medium">
+                        Incoming Offers
+                      </div>
+                      <div class="text-3xl font-bold text-gray-900 mt-1">
+                        {marketData.value.totalBuyOffers}
+                      </div>
                     </div>
-
-                    {/* Collection Name */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Collection Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g., Xahau Legends"
-                        class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300"
-                        value={mintFormData.value.collectionName}
-                        onInput$={(e) =>
-                          (mintFormData.value.collectionName = (
-                            e.target as HTMLInputElement
-                          ).value)
-                        }
-                      />
+                    <div class="bg-gradient-to-br from-amber-50 to-white rounded-xl p-5 border border-amber-100">
+                      <div class="text-xs text-amber-600 font-medium">
+                        Balance
+                      </div>
+                      <div class="text-3xl font-bold text-gray-900 mt-1">
+                        {parseFloat(marketData.value.balance).toFixed(2)}{" "}
+                        <span class="text-sm font-normal">
+                          {nativeCurrency.value}
+                        </span>
+                      </div>
                     </div>
-
-                    {/* Description */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Description
-                      </label>
-                      <textarea
-                        placeholder="Describe your NFT..."
-                        class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300 resize-none h-24"
-                        value={mintFormData.value.description}
-                        onInput$={(e) =>
-                          (mintFormData.value.description = (
-                            e.target as HTMLTextAreaElement
-                          ).value)
-                        }
-                      />
-                    </div>
-
-                    {/* Image Upload */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Image URL
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="https://..."
-                        class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300"
-                        value={previewImage.value}
-                        onInput$={(e) =>
-                          (previewImage.value = (
-                            e.target as HTMLInputElement
-                          ).value)
-                        }
-                      />
-                    </div>
-
-                    {/* Royalty */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Royalty Percentage: {mintFormData.value.royalty}%
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="50"
-                        value={mintFormData.value.royalty}
-                        onInput$={(e) =>
-                          (mintFormData.value.royalty = (
-                            e.target as HTMLInputElement
-                          ).value)
-                        }
-                        class="w-full h-2 bg-white/30 rounded-lg appearance-none cursor-pointer"
-                      />
-                      <p class="text-xs text-gray-600 mt-2">
-                        You'll earn {mintFormData.value.royalty}% on secondary
-                        sales
-                      </p>
-                    </div>
-
-                    {/* Mint Button */}
-                    <button
-                      class="w-full mt-6 px-6 py-3 backdrop-blur-md bg-linear-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:shadow-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
-                      onClick$={() => {
-                        if (
-                          mintFormData.value.nftName &&
-                          mintFormData.value.nftName !== "single" &&
-                          mintFormData.value.collectionName
-                        ) {
-                          const newNft: Nft = {
-                            id: `MINTED-${mintedNfts.value.length + 1}`,
-                            name: mintFormData.value.nftName,
-                            image:
-                              previewImage.value ||
-                              "https://picsum.photos/seed/mint/600/600",
-                            collection: mintFormData.value.collectionName,
-                            owner: "Your Wallet",
-                            price: "0 XRP",
-                            lastSale: "Just minted",
-                          };
-                          mintedNfts.value = [...mintedNfts.value, newNft];
-                          mintFormData.value = {
-                            nftName: "single",
-                            collectionName: "",
-                            description: "",
-                            royalty: "5",
-                          };
-                          previewImage.value = "";
-                        }
-                      }}
-                    >
-                      🚀 Mint NFT
-                    </button>
                   </div>
                 )}
 
-                {/* Collection Form */}
-                {mintFormData.value.nftName === "collection" && (
-                  <div class="space-y-6">
-                    {/* Collection Name */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Collection Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g., Xahau Legends"
-                        class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300"
-                        value={mintFormData.value.collectionName}
-                        onInput$={(e) =>
-                          (mintFormData.value.collectionName = (
-                            e.target as HTMLInputElement
-                          ).value)
-                        }
-                      />
-                    </div>
+                <button
+                  class="mb-6 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                  disabled={loading.value}
+                  onClick$={() => fetchNfts(wallet.address.value)}
+                >
+                  {loading.value ? "Refreshing..." : "🔄 Refresh My NFTs"}
+                </button>
 
-                    {/* Collection Description */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Collection Description
-                      </label>
-                      <textarea
-                        placeholder="Describe your collection..."
-                        class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300 resize-none h-24"
-                        value={mintFormData.value.description}
-                        onInput$={(e) =>
-                          (mintFormData.value.description = (
-                            e.target as HTMLTextAreaElement
-                          ).value)
-                        }
-                      />
-                    </div>
-
-                    {/* Collection Image Upload */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Collection Image URL
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="https://..."
-                        class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300"
-                        value={previewImage.value}
-                        onInput$={(e) =>
-                          (previewImage.value = (
-                            e.target as HTMLInputElement
-                          ).value)
-                        }
-                      />
-                    </div>
-
-                    {/* File Upload for Multiple NFTs */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Upload NFT Files (CSV or JSON)
-                      </label>
-                      <div class="relative">
-                        <input
-                          type="file"
-                          accept=".csv,.json"
-                          class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white/60 transition-all duration-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-500 file:text-white hover:file:bg-purple-600"
-                          multiple
-                        />
-                      </div>
-                      <p class="text-xs text-gray-600 mt-2">
-                        Upload a CSV or JSON file containing NFT details (name,
-                        description, image URL)
-                      </p>
-                    </div>
-
-                    {/* Royalty */}
-                    <div>
-                      <label class="block text-sm font-semibold text-gray-900 mb-2">
-                        Royalty Percentage: {mintFormData.value.royalty}%
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="50"
-                        value={mintFormData.value.royalty}
-                        onInput$={(e) =>
-                          (mintFormData.value.royalty = (
-                            e.target as HTMLInputElement
-                          ).value)
-                        }
-                        class="w-full h-2 bg-white/30 rounded-lg appearance-none cursor-pointer"
-                      />
-                      <p class="text-xs text-gray-600 mt-2">
-                        You'll earn {mintFormData.value.royalty}% on secondary
-                        sales
-                      </p>
-                    </div>
-
-                    {/* Create Collection Button */}
-                    <button
-                      class="w-full mt-6 px-6 py-3 backdrop-blur-md bg-linear-to-r from-purple-500 to-pink-600 text-white rounded-xl hover:shadow-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 font-semibold"
-                      onClick$={() => {
-                        if (mintFormData.value.collectionName) {
-                          const newNft: Nft = {
-                            id: `COLLECTION-${mintedNfts.value.length + 1}`,
-                            name: `${mintFormData.value.collectionName} Collection`,
-                            image:
-                              previewImage.value ||
-                              "https://picsum.photos/seed/collection/600/600",
-                            collection: mintFormData.value.collectionName,
-                            owner: "Your Wallet",
-                            price: "0 XRP",
-                            lastSale: "Just created",
-                          };
-                          mintedNfts.value = [...mintedNfts.value, newNft];
-                          mintFormData.value = {
-                            nftName: "single",
-                            collectionName: "",
-                            description: "",
-                            royalty: "5",
-                          };
-                          previewImage.value = "";
-                        }
-                      }}
-                    >
-                      🎨 Create Collection
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Preview Section */}
-              <div class="space-y-6">
-                <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
-                  <h2 class="text-2xl font-bold text-gray-900 mb-6">Preview</h2>
-
-                  {/* Preview Card */}
-                  <div class="rounded-2xl overflow-hidden backdrop-blur-md bg-white/40 border border-white/50 hover:shadow-2xl transition-all duration-300">
-                    <div class="relative aspect-square overflow-hidden bg-linear-to-br from-gray-100 to-gray-50">
-                      <img
-                        src={
-                          previewImage.value ||
-                          "https://picsum.photos/seed/placeholder/600/600"
-                        }
-                        alt="NFT Preview"
-                        height={400}
-                        width={400}
-                        class="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div class="p-5">
-                      <h3 class="font-bold text-lg text-gray-900 truncate">
-                        {mintFormData.value.nftName || "NFT Name"}
-                      </h3>
-                      <p class="text-sm text-purple-600 truncate font-medium mt-1">
-                        {mintFormData.value.collectionName || "Collection Name"}
-                      </p>
-                      <p class="text-xs text-gray-700 mt-3 line-clamp-2">
-                        {mintFormData.value.description ||
-                          "Your NFT description will appear here"}
-                      </p>
-                      <div class="mt-4 pt-4 border-t border-white/30">
-                        <p class="text-xs text-gray-600">
-                          <span class="font-semibold">Royalty:</span>{" "}
-                          {mintFormData.value.royalty}%
-                        </p>
-                        <p class="text-xs text-gray-600 mt-1">
-                          <span class="font-semibold">Status:</span> Ready to
-                          mint
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Minted NFTs List */}
-                {mintedNfts.value.length > 0 && (
-                  <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-6">
-                      Your Minted NFTs ({mintedNfts.value.length})
-                    </h2>
-                    <div class="space-y-3 max-h-96 overflow-y-auto">
-                      {mintedNfts.value.map((nft) => (
-                        <div
-                          key={nft.id}
-                          class="flex items-center gap-3 p-3 rounded-xl bg-white/20 hover:bg-white/40 transition-all duration-200 cursor-pointer"
-                          onClick$={() => (selectedNft.value = nft)}
-                        >
-                          <img
-                            src={nft.image}
-                            class="w-12 h-12 rounded-lg object-cover"
-                            height={50}
-                            width={50}
-                            loading="lazy"
-                          />
-                          <div class="flex-1 min-w-0">
-                            <p class="font-semibold text-sm text-gray-900 truncate">
-                              {nft.name}
-                            </p>
-                            <p class="text-xs text-purple-600">
-                              {nft.collection}
-                            </p>
-                          </div>
-                          <div class="text-right">
-                            <p class="text-xs text-gray-600 font-semibold">
-                              ✓ Minted
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Token Tab */}
-        {activeTab.value === "token" && (
-          <div class="mt-8">
-            {/* Token Header */}
-            <div class="rounded-3xl backdrop-blur-xl bg-linear-to-br from-orange-50/60 via-white/40 to-amber-50/60 border border-white/50 shadow-2xl p-8 md:p-12 mb-8">
-              <h1 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-                🪙 Create Your Token
-              </h1>
-              <p class="mt-4 text-gray-700 max-w-lg text-lg">
-                Launch your own custom token on the Xahau network. Set your
-                supply, decimals, and token properties to create your unique
-                digital asset.
-              </p>
-              <div class="flex flex-wrap gap-3 mt-6">
-                <Stat
-                  label="Tokens Created"
-                  value={createdTokens.value.length.toString()}
-                />
-                <Stat label="Creation Fee" value="10 XRP" />
-                <Stat label="Min Supply" value="1" />
-              </div>
-            </div>
-
-            {/* Token Form and Preview */}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Form Section */}
-              <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
-                <h2 class="text-2xl font-bold text-gray-900 mb-6">
-                  Token Details
-                </h2>
-
-                <div class="space-y-6">
-                  {/* Token Name */}
-                  <div>
-                    <label class="block text-sm font-semibold text-gray-900 mb-2">
-                      Token Name
-                    </label>
+                {/* Filters */}
+                {nfts.value.length > 0 && (
+                  <div class="flex gap-3 mb-6">
                     <input
                       type="text"
-                      placeholder="e.g., My Custom Token"
-                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300"
-                      value={tokenFormData.value.tokenName}
+                      placeholder="Filter your NFTs..."
+                      class="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      value={searchQuery.value}
                       onInput$={(e) =>
-                        (tokenFormData.value.tokenName = (
+                        (searchQuery.value = (
                           e.target as HTMLInputElement
                         ).value)
                       }
                     />
                   </div>
+                )}
 
-                  {/* Token Symbol */}
+                {/* Loading */}
+                {loading.value && (
+                  <div class="flex items-center justify-center py-20">
+                    <div class="animate-spin w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full" />
+                    <span class="ml-4 text-gray-500">Loading your NFTs...</span>
+                  </div>
+                )}
+
+                {/* Error */}
+                {errorMsg.value && (
+                  <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                    {errorMsg.value}
+                  </div>
+                )}
+
+                {/* My NFT Grid */}
+                {!loading.value && paginated.value.length > 0 && (
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {paginated.value.map((nft) => {
+                      const price = getLowestSellPrice(
+                        nft.sellOffers,
+                        nativeCurrency.value,
+                      );
+                      return (
+                        <div
+                          key={nft.nftokenId}
+                          class="group rounded-2xl overflow-hidden bg-white border border-gray-200 hover:border-purple-300 hover:shadow-xl transition-all duration-300 cursor-pointer hover:-translate-y-1"
+                          onClick$={() => (selectedNft.value = nft)}
+                        >
+                          <div class="relative aspect-square overflow-hidden bg-gray-100">
+                            <img
+                              src={nft.image || PLACEHOLDER_IMG}
+                              alt={nft.name}
+                              width={400}
+                              height={400}
+                              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              loading="lazy"
+                              onError$={(e: any) => {
+                                e.target.src = PLACEHOLDER_IMG;
+                              }}
+                            />
+                            {price && (
+                              <div class="absolute top-3 left-3 bg-green-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                                Listed: {price}
+                              </div>
+                            )}
+                            {nft.buyOffers.length > 0 && (
+                              <div class="absolute top-3 right-3 bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                                {nft.buyOffers.length} offer
+                                {nft.buyOffers.length > 1 ? "s" : ""}
+                              </div>
+                            )}
+                          </div>
+                          <div class="p-4">
+                            <h3 class="font-bold text-gray-900 truncate">
+                              {nft.name}
+                            </h3>
+                            {nft.collection && (
+                              <p class="text-xs text-purple-600 font-medium mt-0.5 truncate">
+                                {nft.collection}
+                              </p>
+                            )}
+                            <div class="flex gap-2 mt-3">
+                              <button
+                                class="flex-1 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 transition"
+                                onClick$={(e) => {
+                                  e.stopPropagation();
+                                  selectedNft.value = nft;
+                                  showOfferModal.value = true;
+                                }}
+                              >
+                                {price ? "Update Listing" : "List for Sale"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!loading.value &&
+                  nfts.value.length === 0 &&
+                  !errorMsg.value && (
+                    <div class="text-center py-20 text-gray-400">
+                      <div class="text-6xl mb-4">📭</div>
+                      <p class="text-lg">You don't have any NFTs yet</p>
+                      <button
+                        class="mt-4 px-6 py-2.5 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition"
+                        onClick$={() => (activeTab.value = "mint")}
+                      >
+                        Mint your first NFT
+                      </button>
+                    </div>
+                  )}
+
+                {/* Pagination */}
+                {totalPages.value > 1 && (
+                  <div class="flex justify-center items-center gap-4 mt-10">
+                    <button
+                      class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40"
+                      disabled={currentPage.value <= 1}
+                      onClick$={() => currentPage.value--}
+                    >
+                      ← Previous
+                    </button>
+                    <span class="text-sm font-semibold text-gray-700">
+                      {currentPage.value} / {totalPages.value}
+                    </span>
+                    <button
+                      class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40"
+                      disabled={currentPage.value >= totalPages.value}
+                      onClick$={() => currentPage.value++}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MINT TAB ── */}
+        {activeTab.value === "mint" && (
+          <div>
+            {!wallet.connected.value ? (
+              <div class="text-center py-20 text-gray-400">
+                <div class="text-6xl mb-4">🔒</div>
+                <p class="text-lg">Connect your wallet to mint NFTs</p>
+              </div>
+            ) : (
+              <div class="max-w-2xl mx-auto">
+                <div class="rounded-2xl bg-gradient-to-br from-purple-50 via-white to-pink-50 border border-gray-200 p-8 mb-8 shadow-sm">
+                  <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                    ✨ Mint a New NFT
+                  </h2>
+                  <p class="text-gray-600 text-sm">
+                    Create an NFT on the{" "}
+                    <span
+                      class="font-semibold"
+                      style={{ color: networkConfig.value.color }}
+                    >
+                      {networkConfig.value.label}
+                    </span>
+                    . Your connected wallet (
+                    {truncateAddress(wallet.address.value)}) will sign the
+                    transaction.
+                  </p>
+                </div>
+
+                <div class="rounded-2xl bg-white border border-gray-200 p-8 shadow-sm space-y-6">
+                  {/* URI */}
                   <div>
                     <label class="block text-sm font-semibold text-gray-900 mb-2">
-                      Token Symbol
+                      NFT URI (IPFS, HTTP, or data URI) *
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g., MCT"
-                      maxLength={10}
-                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300 uppercase"
-                      value={tokenFormData.value.tokenSymbol}
+                      placeholder="ipfs://QmYour... or https://..."
+                      class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+                      value={mintUri.value}
                       onInput$={(e) =>
-                        (tokenFormData.value.tokenSymbol = (
-                          e.target as HTMLInputElement
-                        ).value.toUpperCase())
+                        (mintUri.value = (e.target as HTMLInputElement).value)
                       }
                     />
+                    <p class="text-xs text-gray-500 mt-1">
+                      This is stored on-ledger as hex. Point it to your NFT
+                      metadata JSON or image.
+                    </p>
                   </div>
 
-                  {/* Total Supply */}
+                  {/* Taxon */}
                   <div>
                     <label class="block text-sm font-semibold text-gray-900 mb-2">
-                      Total Supply
+                      NFToken Taxon
                     </label>
                     <input
                       type="number"
-                      placeholder="e.g., 1000000"
-                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300"
-                      value={tokenFormData.value.totalSupply}
+                      min="0"
+                      placeholder="0"
+                      class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
+                      value={mintTaxon.value}
                       onInput$={(e) =>
-                        (tokenFormData.value.totalSupply = (
-                          e.target as HTMLInputElement
-                        ).value)
+                        (mintTaxon.value = (e.target as HTMLInputElement).value)
                       }
                     />
+                    <p class="text-xs text-gray-500 mt-1">
+                      Group NFTs into collections by giving them the same taxon
+                      number.
+                    </p>
                   </div>
 
-                  {/* Decimals */}
+                  {/* Transfer Fee */}
                   <div>
                     <label class="block text-sm font-semibold text-gray-900 mb-2">
-                      Decimals: {tokenFormData.value.decimals}
+                      Transfer Fee:{" "}
+                      {(parseInt(mintTransferFee.value) / 1000 || 0).toFixed(1)}
+                      %
                     </label>
                     <input
                       type="range"
                       min="0"
-                      max="18"
-                      value={tokenFormData.value.decimals}
+                      max="50000"
+                      step="1000"
+                      value={mintTransferFee.value}
                       onInput$={(e) =>
-                        (tokenFormData.value.decimals = (
+                        (mintTransferFee.value = (
                           e.target as HTMLInputElement
                         ).value)
                       }
-                      class="w-full h-2 bg-white/30 rounded-lg appearance-none cursor-pointer"
+                      class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                     />
-                    <p class="text-xs text-gray-600 mt-2">
-                      Number of decimal places for your token
+                    <p class="text-xs text-gray-500 mt-1">
+                      Royalty percentage earned on secondary sales (0–50%).
                     </p>
                   </div>
 
-                  {/* Description */}
+                  {/* Flags */}
                   <div>
                     <label class="block text-sm font-semibold text-gray-900 mb-2">
-                      Description
+                      Flags
                     </label>
-                    <textarea
-                      placeholder="Describe your token..."
-                      class="w-full rounded-xl backdrop-blur-md bg-white/40 border border-white/60 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white/60 transition-all duration-300 resize-none h-24"
-                      value={tokenFormData.value.description}
-                      onInput$={(e) =>
-                        (tokenFormData.value.description = (
-                          e.target as HTMLTextAreaElement
-                        ).value)
-                      }
-                    />
+                    <div class="flex flex-wrap gap-3">
+                      <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={!!(mintFlags.value & 8)}
+                          onChange$={() =>
+                            (mintFlags.value = mintFlags.value ^ 8)
+                          }
+                          class="rounded accent-purple-600"
+                        />
+                        Transferable
+                      </label>
+                      <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={!!(mintFlags.value & 2)}
+                          onChange$={() =>
+                            (mintFlags.value = mintFlags.value ^ 2)
+                          }
+                          class="rounded accent-purple-600"
+                        />
+                        Burnable by Issuer
+                      </label>
+                      <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={!!(mintFlags.value & 1)}
+                          onChange$={() =>
+                            (mintFlags.value = mintFlags.value ^ 1)
+                          }
+                          class="rounded accent-purple-600"
+                        />
+                        Only Issuer Can Sell
+                      </label>
+                    </div>
                   </div>
 
-                  {/* Create Token Button */}
+                  {/* Preview */}
+                  {mintUri.value && (
+                    <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <div class="text-xs text-gray-500 font-medium mb-2">
+                        Preview
+                      </div>
+                      <div class="text-xs font-mono break-all text-gray-600">
+                        URI (hex):{" "}
+                        {Array.from(new TextEncoder().encode(mintUri.value))
+                          .map((b) => b.toString(16).padStart(2, "0"))
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 80)}
+                        ...
+                      </div>
+                    </div>
+                  )}
+
                   <button
-                    class="w-full mt-6 px-6 py-3 backdrop-blur-md bg-linear-to-r from-orange-500 to-amber-600 text-white rounded-xl hover:shadow-lg hover:from-orange-600 hover:to-amber-700 transition-all duration-300 font-semibold"
-                    onClick$={() => {
-                      if (
-                        tokenFormData.value.tokenName &&
-                        tokenFormData.value.tokenSymbol &&
-                        tokenFormData.value.totalSupply
-                      ) {
-                        const newToken: Token = {
-                          id: `TOKEN-${createdTokens.value.length + 1}`,
-                          symbol: tokenFormData.value.tokenSymbol,
-                          name: tokenFormData.value.tokenName,
-                          totalSupply: tokenFormData.value.totalSupply,
-                          decimals: parseInt(tokenFormData.value.decimals),
-                          description: tokenFormData.value.description,
-                          owner: "Your Wallet",
-                          createdDate: new Date().toLocaleDateString(),
-                        };
-                        createdTokens.value = [
-                          ...createdTokens.value,
-                          newToken,
-                        ];
-                        tokenFormData.value = {
-                          tokenName: "",
-                          tokenSymbol: "",
-                          totalSupply: "",
-                          decimals: "6",
-                          description: "",
-                        };
-                      }
-                    }}
+                    class="w-full py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition shadow-lg disabled:opacity-50 text-lg"
+                    disabled={!mintUri.value}
+                    onClick$={handleMint}
                   >
-                    🚀 Create Token
+                    🚀 Mint NFT
                   </button>
                 </div>
               </div>
-
-              {/* Preview Section */}
-              <div class="space-y-6">
-                <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
-                  <h2 class="text-2xl font-bold text-gray-900 mb-6">Preview</h2>
-
-                  {/* Preview Card */}
-                  <div class="rounded-2xl overflow-hidden backdrop-blur-md bg-white/40 border border-white/50 hover:shadow-2xl transition-all duration-300 p-6">
-                    <div class="flex items-center gap-4 mb-6">
-                      <div class="w-16 h-16 rounded-full bg-linear-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white text-2xl font-bold">
-                        {tokenFormData.value.tokenSymbol.charAt(0) || "T"}
-                      </div>
-                      <div>
-                        <h3 class="font-bold text-lg text-gray-900">
-                          {tokenFormData.value.tokenName || "Token Name"}
-                        </h3>
-                        <p class="text-sm text-orange-600 font-semibold">
-                          {tokenFormData.value.tokenSymbol || "SYMBOL"}
-                        </p>
-                      </div>
-                    </div>
-                    <div class="space-y-3 bg-white/20 rounded-xl p-4 border border-white/30">
-                      <div>
-                        <p class="text-xs text-gray-600 font-semibold">
-                          Total Supply
-                        </p>
-                        <p class="text-sm text-gray-900 font-bold">
-                          {tokenFormData.value.totalSupply || "0"}{" "}
-                          {tokenFormData.value.tokenSymbol || "SYMBOL"}
-                        </p>
-                      </div>
-                      <div>
-                        <p class="text-xs text-gray-600 font-semibold">
-                          Decimals
-                        </p>
-                        <p class="text-sm text-gray-900 font-bold">
-                          {tokenFormData.value.decimals}
-                        </p>
-                      </div>
-                      <div>
-                        <p class="text-xs text-gray-600 font-semibold">
-                          Status
-                        </p>
-                        <p class="text-sm text-gray-900 font-bold">
-                          Ready to create
-                        </p>
-                      </div>
-                    </div>
-                    <p class="text-xs text-gray-700 mt-4 line-clamp-3">
-                      {tokenFormData.value.description ||
-                        "Your token description will appear here"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Created Tokens List */}
-                {createdTokens.value.length > 0 && (
-                  <div class="rounded-3xl backdrop-blur-md bg-white/40 border border-white/50 p-8 shadow-xl">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-6">
-                      Your Tokens ({createdTokens.value.length})
-                    </h2>
-                    <div class="space-y-3 max-h-96 overflow-y-auto">
-                      {createdTokens.value.map((token) => (
-                        <div
-                          key={token.id}
-                          class="flex items-center gap-3 p-4 rounded-xl bg-white/20 hover:bg-white/40 transition-all duration-200 border border-white/30"
-                        >
-                          <div class="w-10 h-10 rounded-full bg-linear-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                            {token.symbol.charAt(0)}
-                          </div>
-                          <div class="flex-1 min-w-0">
-                            <p class="font-semibold text-sm text-gray-900 truncate">
-                              {token.name}
-                            </p>
-                            <p class="text-xs text-orange-600 font-medium">
-                              {token.symbol} • Supply: {token.totalSupply}
-                            </p>
-                          </div>
-                          <div class="text-right text-xs">
-                            <p class="text-gray-600 font-semibold">✓ Created</p>
-                            <p class="text-gray-500 text-xs">
-                              {token.createdDate}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
           </div>
         )}
       </section>
 
-      {/* NFT Modal */}
-      {selectedNft.value && (
-        <div class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-          <div class="backdrop-blur-xl bg-white/80 rounded-3xl p-8 w-11/12 max-w-2xl relative border border-white/60 shadow-2xl">
-            <button
-              class="absolute top-4 right-4 text-gray-500 hover:text-gray-900 text-2xl transition-colors duration-200"
-              onClick$={() => (selectedNft.value = null)}
-            >
-              ✕
-            </button>
-            <div class="rounded-2xl overflow-hidden mb-6 border border-white/40">
-              <img
-                src={selectedNft.value.image}
-                alt={selectedNft.value.name}
-                height={400}
-                width={400}
-                class="w-full h-auto object-cover"
-              />
-            </div>
-            <h2 class="text-3xl font-bold mb-2 text-gray-900">
-              {selectedNft.value.name}
-            </h2>
-            <p class="text-lg text-blue-600 mb-4 font-semibold">
-              {selectedNft.value.collection}
-            </p>
-            <div class="space-y-2 mb-6 bg-white/30 backdrop-blur-sm rounded-xl p-4 border border-white/40">
-              <p class="text-sm text-gray-700">
-                <span class="font-semibold text-gray-900">Owner:</span>{" "}
-                {selectedNft.value.owner}
-              </p>
-              <p class="text-sm text-gray-700">
-                <span class="font-semibold text-gray-900">Price:</span>{" "}
-                {selectedNft.value.price}
-              </p>
-              <p class="text-sm text-gray-700">
-                <span class="font-semibold text-gray-900">Last Sale:</span>{" "}
-                {selectedNft.value.lastSale}
-              </p>
-            </div>
-            <div class="flex gap-3">
-              <button class="flex-1 px-4 py-3 backdrop-blur-md bg-linear-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 font-semibold">
-                Buy
-              </button>
-              <button class="flex-1 px-4 py-3 backdrop-blur-md bg-white/40 border border-white/50 text-gray-900 rounded-xl hover:bg-white/60 transition-all duration-300 font-semibold">
-                Make Offer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <footer class="text-center mt-36 -mb-10 font-extralight">
         © 2025 – Product of <a href="https://nrdxlab.com">{"{NRDX}"}Labs</a>.
         All rights reserved.

@@ -220,9 +220,9 @@ export default component$(() => {
   const address = useSignal("");
   const searchQuery = useSignal("");
   const queryType = useSignal<"account_info" | "tx" | "ledger">("account_info");
-  const activeTab = useSignal<"explorer" | "amendments" | "etf" | "globe">(
-    "explorer",
-  );
+  const activeTab = useSignal<
+    "explorer" | "tokens" | "amendments" | "etf" | "globe"
+  >("explorer");
 
   const status = useSignal<"disconnected" | "connecting" | "connected">(
     "disconnected",
@@ -246,6 +246,14 @@ export default component$(() => {
   // DEX & ETF Data
   const dexTrades = useSignal<DexTrade[]>([]);
   const amendments = useSignal<typeof AMENDMENTS_DATA>([...AMENDMENTS_DATA]);
+
+  // ── Tokens tab state ──
+  const tokenAddress = useSignal("");
+  const tokenLoading = useSignal(false);
+  const tokenError = useSignal<string | null>(null);
+  const accountLines = useSignal<any[]>([]);
+  const gatewayBalances = useSignal<any>(null);
+  const tokenTab = useSignal<"lines" | "gateway">("lines");
 
   // ─── Utils ─────────────────────────────────────
 
@@ -497,6 +505,69 @@ export default component$(() => {
     }
   });
 
+  // ── Fetch account_lines & gateway_balances for Tokens tab ──
+  const fetchTokenData = $(async () => {
+    const addr = tokenAddress.value.trim();
+    if (!addr || !addr.startsWith("r") || addr.length < 25) {
+      tokenError.value = "Enter a valid r-address";
+      return;
+    }
+    if (!client.value) {
+      tokenError.value = "WebSocket not connected — wait a moment and retry";
+      return;
+    }
+
+    tokenLoading.value = true;
+    tokenError.value = null;
+    accountLines.value = [];
+    gatewayBalances.value = null;
+
+    try {
+      // account_lines — paginate to get all trust lines
+      let allLines: any[] = [];
+      let marker: any = undefined;
+      do {
+        const req: any = {
+          command: "account_lines",
+          account: addr,
+          ledger_index: "validated",
+          limit: 400,
+        };
+        if (marker) req.marker = marker;
+        const res = await (client.value as any).request(req);
+        allLines = allLines.concat(res.result.lines || []);
+        marker = res.result.marker;
+      } while (marker && allLines.length < 2000);
+
+      accountLines.value = allLines;
+
+      // gateway_balances
+      try {
+        const gwRes = await (client.value as any).request({
+          command: "gateway_balances",
+          account: addr,
+          ledger_index: "validated",
+        });
+        gatewayBalances.value = gwRes.result;
+      } catch (gwErr: any) {
+        // Some accounts aren't gateways — that's fine
+        if (
+          gwErr?.data?.error === "invalidParams" ||
+          gwErr?.message?.includes("invalidParams")
+        ) {
+          gatewayBalances.value = null;
+        } else {
+          console.warn("gateway_balances error:", gwErr);
+          gatewayBalances.value = null;
+        }
+      }
+    } catch (err: any) {
+      tokenError.value = err?.message ?? "Failed to fetch token data";
+    } finally {
+      tokenLoading.value = false;
+    }
+  });
+
   return (
     <main class=" mt-24 bg-white text-gray-900">
       {/* Header */}
@@ -506,6 +577,7 @@ export default component$(() => {
           <div class="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
             {[
               { id: "explorer", label: "Explorer", icon: "📊" },
+              { id: "tokens", label: "Tokens", icon: "🪙" },
               { id: "amendments", label: "Amendments", icon: "⚙️" },
               { id: "etf", label: "ETF Tracker", icon: "💹" },
               { id: "globe", label: "DEX Map", icon: "🌐" },
@@ -529,6 +601,506 @@ export default component$(() => {
 
       {/* Main Content */}
       <div class="mx-auto max-w-7xl px-6 py-8">
+        {/* ── Tokens Tab ── */}
+        {activeTab.value === "tokens" && (
+          <div class="space-y-6">
+            {/* Search */}
+            <div class="flex flex-col sm:flex-row gap-3">
+              <div class="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Enter r-address to view trust lines & gateway balances..."
+                  class="w-full rounded-lg border border-gray-300 bg-white px-5 py-4 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                  value={tokenAddress.value}
+                  onInput$={(e) =>
+                    (tokenAddress.value = (e.target as HTMLInputElement).value)
+                  }
+                  onKeyDown$={(e) => {
+                    if (e.key === "Enter") fetchTokenData();
+                  }}
+                />
+              </div>
+              <button
+                class="px-8 py-4 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition disabled:opacity-50"
+                disabled={tokenLoading.value || !tokenAddress.value.trim()}
+                onClick$={fetchTokenData}
+              >
+                {tokenLoading.value ? "Loading..." : "🔍 Fetch Tokens"}
+              </button>
+            </div>
+
+            {/* Error */}
+            {tokenError.value && (
+              <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                {tokenError.value}
+              </div>
+            )}
+
+            {/* Loading */}
+            {tokenLoading.value && (
+              <div class="flex items-center justify-center py-16">
+                <div class="animate-spin w-8 h-8 border-4 border-cyan-200 border-t-cyan-600 rounded-full" />
+                <span class="ml-3 text-gray-500">
+                  Fetching token data from the ledger...
+                </span>
+              </div>
+            )}
+
+            {/* Results */}
+            {!tokenLoading.value &&
+              (accountLines.value.length > 0 || gatewayBalances.value) && (
+                <div>
+                  {/* Sub-tabs: account_lines vs gateway_balances */}
+                  <div class="flex gap-1 border-b border-gray-200 mb-6">
+                    <button
+                      class={`px-5 py-3 text-sm font-semibold transition-all border-b-2 ${
+                        tokenTab.value === "lines"
+                          ? "text-cyan-600 border-cyan-600"
+                          : "text-gray-500 border-transparent hover:text-gray-800"
+                      }`}
+                      onClick$={() => (tokenTab.value = "lines")}
+                    >
+                      Trust Lines ({accountLines.value.length})
+                    </button>
+                    <button
+                      class={`px-5 py-3 text-sm font-semibold transition-all border-b-2 ${
+                        tokenTab.value === "gateway"
+                          ? "text-cyan-600 border-cyan-600"
+                          : "text-gray-500 border-transparent hover:text-gray-800"
+                      }`}
+                      onClick$={() => (tokenTab.value = "gateway")}
+                    >
+                      Gateway Balances
+                    </button>
+                  </div>
+
+                  {/* ── account_lines ── */}
+                  {tokenTab.value === "lines" && (
+                    <div>
+                      {accountLines.value.length === 0 ? (
+                        <div class="text-center py-12 text-gray-400">
+                          <div class="text-4xl mb-2">🔗</div>
+                          <p>No trust lines found for this account</p>
+                        </div>
+                      ) : (
+                        <div class="overflow-x-auto rounded-xl border border-gray-200">
+                          <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                              <tr>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">
+                                  Currency
+                                </th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">
+                                  Balance
+                                </th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">
+                                  Limit
+                                </th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">
+                                  Peer Limit
+                                </th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">
+                                  Issuer / Peer
+                                </th>
+                                <th class="px-4 py-3 text-center font-semibold text-gray-700">
+                                  Quality
+                                </th>
+                                <th class="px-4 py-3 text-center font-semibold text-gray-700">
+                                  Flags
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                              {accountLines.value.map(
+                                (line: any, idx: number) => {
+                                  const bal = parseFloat(line.balance || "0");
+                                  const isNegative = bal < 0;
+                                  const isZero = bal === 0;
+                                  const currency =
+                                    line.currency?.length === 40
+                                      ? `${line.currency.slice(0, 8)}…`
+                                      : line.currency;
+
+                                  return (
+                                    <tr
+                                      key={`${line.account}-${line.currency}-${idx}`}
+                                      class="hover:bg-gray-50 transition"
+                                    >
+                                      <td class="px-4 py-3">
+                                        <span class="font-mono font-bold text-gray-900">
+                                          {currency}
+                                        </span>
+                                      </td>
+                                      <td
+                                        class={`px-4 py-3 text-right font-mono font-semibold ${isNegative ? "text-red-600" : isZero ? "text-gray-400" : "text-green-700"}`}
+                                      >
+                                        {bal.toLocaleString(undefined, {
+                                          maximumFractionDigits: 8,
+                                        })}
+                                      </td>
+                                      <td class="px-4 py-3 text-right font-mono text-gray-600">
+                                        {parseFloat(
+                                          line.limit || "0",
+                                        ).toLocaleString()}
+                                      </td>
+                                      <td class="px-4 py-3 text-right font-mono text-gray-600">
+                                        {parseFloat(
+                                          line.limit_peer || "0",
+                                        ).toLocaleString()}
+                                      </td>
+                                      <td
+                                        class="px-4 py-3 font-mono text-xs text-gray-500 max-w-[180px] truncate"
+                                        title={line.account}
+                                      >
+                                        {line.account
+                                          ? `${line.account.slice(0, 8)}…${line.account.slice(-6)}`
+                                          : "—"}
+                                      </td>
+                                      <td class="px-4 py-3 text-center text-xs text-gray-500">
+                                        {line.quality_in &&
+                                        line.quality_in !== 0
+                                          ? `In: ${line.quality_in}`
+                                          : ""}
+                                        {line.quality_out &&
+                                        line.quality_out !== 0
+                                          ? ` Out: ${line.quality_out}`
+                                          : ""}
+                                        {(!line.quality_in ||
+                                          line.quality_in === 0) &&
+                                        (!line.quality_out ||
+                                          line.quality_out === 0)
+                                          ? "—"
+                                          : ""}
+                                      </td>
+                                      <td class="px-4 py-3 text-center">
+                                        <div class="flex gap-1 justify-center flex-wrap">
+                                          {line.no_ripple && (
+                                            <span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
+                                              NoRipple
+                                            </span>
+                                          )}
+                                          {line.freeze && (
+                                            <span class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+                                              Frozen
+                                            </span>
+                                          )}
+                                          {line.authorized && (
+                                            <span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
+                                              Auth
+                                            </span>
+                                          )}
+                                          {!line.no_ripple &&
+                                            !line.freeze &&
+                                            !line.authorized && (
+                                              <span class="text-[10px] text-gray-400">
+                                                —
+                                              </span>
+                                            )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                },
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Summary stats */}
+                      {accountLines.value.length > 0 && (
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                          <div class="rounded-xl bg-gray-50 border border-gray-100 p-4">
+                            <div class="text-xs text-gray-500 font-medium">
+                              Total Lines
+                            </div>
+                            <div class="text-2xl font-bold text-gray-900 mt-1">
+                              {accountLines.value.length}
+                            </div>
+                          </div>
+                          <div class="rounded-xl bg-gray-50 border border-gray-100 p-4">
+                            <div class="text-xs text-gray-500 font-medium">
+                              Unique Currencies
+                            </div>
+                            <div class="text-2xl font-bold text-gray-900 mt-1">
+                              {
+                                new Set(
+                                  accountLines.value.map(
+                                    (l: any) => l.currency,
+                                  ),
+                                ).size
+                              }
+                            </div>
+                          </div>
+                          <div class="rounded-xl bg-gray-50 border border-gray-100 p-4">
+                            <div class="text-xs text-gray-500 font-medium">
+                              Positive Balances
+                            </div>
+                            <div class="text-2xl font-bold text-green-600 mt-1">
+                              {
+                                accountLines.value.filter(
+                                  (l: any) => parseFloat(l.balance || "0") > 0,
+                                ).length
+                              }
+                            </div>
+                          </div>
+                          <div class="rounded-xl bg-gray-50 border border-gray-100 p-4">
+                            <div class="text-xs text-gray-500 font-medium">
+                              Frozen Lines
+                            </div>
+                            <div class="text-2xl font-bold text-blue-600 mt-1">
+                              {
+                                accountLines.value.filter((l: any) => l.freeze)
+                                  .length
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── gateway_balances ── */}
+                  {tokenTab.value === "gateway" && (
+                    <div>
+                      {!gatewayBalances.value ? (
+                        <div class="text-center py-12 text-gray-400">
+                          <div class="text-4xl mb-2">🏦</div>
+                          <p>
+                            No gateway balance data available for this account
+                          </p>
+                          <p class="text-xs mt-1">
+                            This command works best with issuer / gateway
+                            accounts
+                          </p>
+                        </div>
+                      ) : (
+                        <div class="space-y-6">
+                          {/* Obligations */}
+                          {gatewayBalances.value.obligations &&
+                            Object.keys(gatewayBalances.value.obligations)
+                              .length > 0 && (
+                              <div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                  <span class="text-red-500">📤</span>{" "}
+                                  Obligations (Issued to Others)
+                                </h3>
+                                <div class="overflow-x-auto rounded-xl border border-red-100">
+                                  <table class="w-full text-sm">
+                                    <thead class="bg-red-50">
+                                      <tr>
+                                        <th class="px-4 py-3 text-left font-semibold text-red-800">
+                                          Currency
+                                        </th>
+                                        <th class="px-4 py-3 text-right font-semibold text-red-800">
+                                          Total Outstanding
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-red-50">
+                                      {Object.entries(
+                                        gatewayBalances.value.obligations,
+                                      ).map(
+                                        ([currency, amount]: [string, any]) => (
+                                          <tr
+                                            key={`obl-${currency}`}
+                                            class="hover:bg-red-50/50 transition"
+                                          >
+                                            <td class="px-4 py-3 font-mono font-bold text-gray-900">
+                                              {currency.length === 40
+                                                ? `${currency.slice(0, 8)}…`
+                                                : currency}
+                                            </td>
+                                            <td class="px-4 py-3 text-right font-mono font-semibold text-red-700">
+                                              {parseFloat(
+                                                amount,
+                                              ).toLocaleString(undefined, {
+                                                maximumFractionDigits: 8,
+                                              })}
+                                            </td>
+                                          </tr>
+                                        ),
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                          {/* Balances (held by this account from other issuers) */}
+                          {gatewayBalances.value.balances &&
+                            Object.keys(gatewayBalances.value.balances).length >
+                              0 && (
+                              <div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                  <span class="text-green-500">📥</span>{" "}
+                                  Balances (Held by Account)
+                                </h3>
+                                <div class="overflow-x-auto rounded-xl border border-green-100">
+                                  <table class="w-full text-sm">
+                                    <thead class="bg-green-50">
+                                      <tr>
+                                        <th class="px-4 py-3 text-left font-semibold text-green-800">
+                                          Counterparty
+                                        </th>
+                                        <th class="px-4 py-3 text-left font-semibold text-green-800">
+                                          Currency
+                                        </th>
+                                        <th class="px-4 py-3 text-right font-semibold text-green-800">
+                                          Balance
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-green-50">
+                                      {Object.entries(
+                                        gatewayBalances.value.balances,
+                                      ).flatMap(
+                                        ([peer, currencies]: [string, any]) =>
+                                          (currencies as any[]).map(
+                                            (c: any, i: number) => (
+                                              <tr
+                                                key={`bal-${peer}-${i}`}
+                                                class="hover:bg-green-50/50 transition"
+                                              >
+                                                <td
+                                                  class="px-4 py-3 font-mono text-xs text-gray-500"
+                                                  title={peer}
+                                                >
+                                                  {peer
+                                                    ? `${peer.slice(0, 8)}…${peer.slice(-6)}`
+                                                    : "—"}
+                                                </td>
+                                                <td class="px-4 py-3 font-mono font-bold text-gray-900">
+                                                  {c.currency?.length === 40
+                                                    ? `${c.currency.slice(0, 8)}…`
+                                                    : c.currency}
+                                                </td>
+                                                <td class="px-4 py-3 text-right font-mono font-semibold text-green-700">
+                                                  {parseFloat(
+                                                    c.value || "0",
+                                                  ).toLocaleString(undefined, {
+                                                    maximumFractionDigits: 8,
+                                                  })}
+                                                </td>
+                                              </tr>
+                                            ),
+                                          ),
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                          {/* Assets (frozen balances held by others) */}
+                          {gatewayBalances.value.assets &&
+                            Object.keys(gatewayBalances.value.assets).length >
+                              0 && (
+                              <div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                  <span class="text-blue-500">🧊</span> Frozen
+                                  Assets
+                                </h3>
+                                <div class="overflow-x-auto rounded-xl border border-blue-100">
+                                  <table class="w-full text-sm">
+                                    <thead class="bg-blue-50">
+                                      <tr>
+                                        <th class="px-4 py-3 text-left font-semibold text-blue-800">
+                                          Counterparty
+                                        </th>
+                                        <th class="px-4 py-3 text-left font-semibold text-blue-800">
+                                          Currency
+                                        </th>
+                                        <th class="px-4 py-3 text-right font-semibold text-blue-800">
+                                          Amount
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-blue-50">
+                                      {Object.entries(
+                                        gatewayBalances.value.assets,
+                                      ).flatMap(
+                                        ([peer, currencies]: [string, any]) =>
+                                          (currencies as any[]).map(
+                                            (c: any, i: number) => (
+                                              <tr
+                                                key={`asset-${peer}-${i}`}
+                                                class="hover:bg-blue-50/50 transition"
+                                              >
+                                                <td
+                                                  class="px-4 py-3 font-mono text-xs text-gray-500"
+                                                  title={peer}
+                                                >
+                                                  {peer
+                                                    ? `${peer.slice(0, 8)}…${peer.slice(-6)}`
+                                                    : "—"}
+                                                </td>
+                                                <td class="px-4 py-3 font-mono font-bold text-gray-900">
+                                                  {c.currency?.length === 40
+                                                    ? `${c.currency.slice(0, 8)}…`
+                                                    : c.currency}
+                                                </td>
+                                                <td class="px-4 py-3 text-right font-mono font-semibold text-blue-700">
+                                                  {parseFloat(
+                                                    c.value || "0",
+                                                  ).toLocaleString(undefined, {
+                                                    maximumFractionDigits: 8,
+                                                  })}
+                                                </td>
+                                              </tr>
+                                            ),
+                                          ),
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                          {/* No data message */}
+                          {!gatewayBalances.value.obligations &&
+                            !gatewayBalances.value.balances &&
+                            !gatewayBalances.value.assets && (
+                              <div class="text-center py-12 text-gray-400">
+                                <div class="text-4xl mb-2">📊</div>
+                                <p>Gateway returned no balance data</p>
+                              </div>
+                            )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            {/* Empty state */}
+            {!tokenLoading.value &&
+              accountLines.value.length === 0 &&
+              !gatewayBalances.value &&
+              !tokenError.value &&
+              tokenAddress.value.trim() === "" && (
+                <div class="text-center py-16 text-gray-400">
+                  <div class="text-6xl mb-4">🪙</div>
+                  <p class="text-lg">
+                    Enter an r-address to view trust lines &amp; gateway
+                    balances
+                  </p>
+                  <p class="text-sm mt-2">
+                    Uses{" "}
+                    <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+                      account_lines
+                    </code>{" "}
+                    and{" "}
+                    <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+                      gateway_balances
+                    </code>{" "}
+                    commands
+                  </p>
+                </div>
+              )}
+          </div>
+        )}
+
         {/* Explorer Tab */}
         {activeTab.value === "explorer" && (
           <div class="space-y-8">

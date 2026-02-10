@@ -12,7 +12,7 @@ interface HeaderProps {
   transparent?: boolean;
 }
 
-export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
+export const HeaderModern = component$<HeaderProps>(() => {
   const location = useLocation();
   const navigate = useNavigate();
   const mobileMenuOpen = useSignal(false);
@@ -45,10 +45,12 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
       });
 
       if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as Record<
-          string,
-          unknown
-        >;
+        let errData: Record<string, unknown> = {};
+        try {
+          errData = await res.json();
+        } catch {
+          errData = {};
+        }
         throw new Error(
           (errData.error as string) || "Failed to create Xaman payload",
         );
@@ -213,19 +215,14 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
   });
 
   return (
-    <header
-      class={`sticky top-0 z-50 transition-all ${
-        transparent
-          ? "bg-transparent"
-          : "bg-white/80 backdrop-blur-md border-b border-gray-200/50"
-      }`}
-    >
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
+    <>
+      {/* Glassmorphic Pill Header */}
+      <header class="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+        <div class="flex h-14 sm:h-16 max-w-6xl w-full items-center justify-between rounded-full bg-white/70 dark:bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg px-4 sm:px-6 md:px-8 transition-all duration-300 hover:bg-white/80 hover:shadow-xl">
           {/* Logo */}
-          <div class="flex-shrink-0">
+          <div class="shrink-0">
             <button
-              class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition"
+              class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition"
               onClick$={() => navigate("/")}
             >
               {"{XRPL}"}OS
@@ -233,14 +230,14 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
           </div>
 
           {/* Desktop Navigation */}
-          <nav class="hidden md:flex items-center gap-8">
+          <nav class="hidden md:flex items-center gap-2">
             {navItems.map((item) => (
               <button
                 key={item.href}
-                class={`text-sm font-medium transition-colors ${
+                class={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                   location.url.pathname.startsWith(item.href)
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-600 hover:text-gray-900"
+                    ? "bg-blue-500/10 text-blue-600"
+                    : "text-gray-700 hover:bg-gray-100/50"
                 }`}
                 onClick$={() => navigate(item.href)}
               >
@@ -250,18 +247,18 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
           </nav>
 
           {/* Right Side Actions */}
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 sm:gap-3">
             <div class="hidden sm:flex items-center gap-2">
               {isConnected ? (
-                <div class="flex items-center gap-3">
-                  <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/50 backdrop-blur-sm">
+                <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/50 backdrop-blur-sm">
                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                     <span class="text-xs font-medium text-green-700">
                       {truncateAddress(walletCtx.address.value, 4)}
                     </span>
                   </div>
                   <button
-                    class="text-xs font-medium px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 transition"
+                    class="text-xs font-medium px-3 py-1.5 rounded-full text-red-600 hover:bg-red-50 transition"
                     onClick$={handleDisconnect}
                   >
                     Disconnect
@@ -269,7 +266,7 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
                 </div>
               ) : (
                 <button
-                  class="btn btn-primary btn-sm"
+                  class="px-4 py-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-medium hover:shadow-lg transition-all duration-300"
                   onClick$={() => (showWalletModal.value = true)}
                 >
                   Connect Wallet
@@ -279,12 +276,12 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
 
             {/* Mobile Menu Button */}
             <button
-              class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition"
+              class="md:hidden p-2 rounded-full hover:bg-gray-100/50 transition"
               onClick$={() => (mobileMenuOpen.value = !mobileMenuOpen.value)}
               aria-label="Toggle menu"
             >
               <svg
-                class="w-6 h-6"
+                class="w-5 h-5 sm:w-6 sm:h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -308,14 +305,16 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Mobile Menu */}
-        {mobileMenuOpen.value && (
-          <nav class="md:hidden pb-4 border-t border-gray-200 pt-4 space-y-2">
+      {/* Mobile Menu */}
+      {mobileMenuOpen.value && (
+        <div class="fixed inset-x-4 top-20 z-40 rounded-2xl bg-white/90 backdrop-blur-xl border border-white/20 shadow-xl p-4 md:hidden animate-slide-down">
+          <nav class="space-y-2">
             {navItems.map((item) => (
               <button
                 key={item.href}
-                class="block w-full text-left px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                class="block w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100/70 rounded-xl transition"
                 onClick$={() => {
                   navigate(item.href);
                   mobileMenuOpen.value = false;
@@ -326,7 +325,7 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
             ))}
             {!isConnected && (
               <button
-                class="w-full mt-4 btn btn-primary"
+                class="w-full mt-4 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium"
                 onClick$={() => {
                   showWalletModal.value = true;
                   mobileMenuOpen.value = false;
@@ -336,29 +335,40 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
               </button>
             )}
             {isConnected && (
-              <button
-                class="w-full mt-4 btn btn-secondary"
-                onClick$={() => {
-                  handleDisconnect();
-                  mobileMenuOpen.value = false;
-                }}
-              >
-                Disconnect
-              </button>
+              <div class="space-y-2 pt-2 border-t border-gray-200">
+                <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-50">
+                  <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                  <span class="text-xs font-medium text-green-700">
+                    {truncateAddress(walletCtx.address.value, 4)}
+                  </span>
+                </div>
+                <button
+                  class="w-full px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition font-medium"
+                  onClick$={() => {
+                    handleDisconnect();
+                    mobileMenuOpen.value = false;
+                  }}
+                >
+                  Disconnect
+                </button>
+              </div>
             )}
           </nav>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Wallet Modal */}
       {showWalletModal.value && (
         <>
           <div
-            class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            class="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm"
             onClick$={() => (showWalletModal.value = false)}
           ></div>
-          <div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 max-w-md w-full mx-4">
-            <div class="bg-white rounded-2xl shadow-2xl p-6 backdrop-blur-xl">
+          <div class="fixed inset-0 z-[201] flex items-center justify-center p-4 overflow-y-auto pointer-events-none">
+            <div
+              class="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full m-auto pointer-events-auto"
+              onClick$={(e) => e.stopPropagation()}
+            >
               <div class="flex items-center justify-between mb-6">
                 <h2 class="text-xl font-bold text-gray-900">Connect Wallet</h2>
                 <button
@@ -450,11 +460,14 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
       {showQrModal.value && qrImage.value && (
         <>
           <div
-            class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            class="fixed inset-0 z-[210] bg-black/50 backdrop-blur-sm"
             onClick$={() => (showQrModal.value = false)}
           ></div>
-          <div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 max-w-sm w-full mx-4">
-            <div class="bg-white rounded-2xl shadow-2xl p-6 backdrop-blur-xl text-center">
+          <div class="fixed inset-0 z-[211] flex items-center justify-center p-4 overflow-y-auto pointer-events-none">
+            <div
+              class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center m-auto pointer-events-auto"
+              onClick$={(e) => e.stopPropagation()}
+            >
               <h3 class="text-lg font-bold text-gray-900 mb-4">
                 Scan with Xaman
               </h3>
@@ -471,7 +484,7 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
                 Open Xaman and scan this QR code to sign in
               </p>
               <button
-                class="w-full btn btn-secondary"
+                class="w-full px-4 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
                 onClick$={() => (showQrModal.value = false)}
               >
                 Cancel
@@ -480,6 +493,6 @@ export const HeaderModern = component$<HeaderProps>(({ transparent }) => {
           </div>
         </>
       )}
-    </header>
+    </>
   );
 });

@@ -36,7 +36,7 @@ interface Transaction {
   Account: string;
   Destination?: string;
   meta: { TransactionResult: string };
-  date?: string; // added for safety
+  date?: string;
 }
 
 interface NFToken {
@@ -121,7 +121,6 @@ export default component$(() => {
       padding-top: var(--gap);
     }
 
-    /* ── Search ── */
     .top {
       position: sticky;
       top: var(--gap);
@@ -146,7 +145,6 @@ export default component$(() => {
 
     input { flex: 1; }
 
-    /* ── Tabs ── */
     .tabs {
       max-width: 1280px;
       margin: 0 auto;
@@ -172,7 +170,6 @@ export default component$(() => {
       border-bottom-color: #111827;
     }
 
-    /* ── Bento Grid ── */
     .bento {
       max-width: 1280px;
       margin: 0 auto;
@@ -208,7 +205,6 @@ export default component$(() => {
       color: #6b7280;
     }
 
-    /* ── Cards ── */
     .card {
       border: 1px solid #f1f1f1;
       border-radius: 1.25rem;
@@ -225,13 +221,6 @@ export default component$(() => {
     }
 
     .body { padding: 1.25rem; }
-
-    /* ── NFT Grid ── */
-    .nft-wrap {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 2rem 1rem 4rem;
-    }
 
     .collection {
       margin-bottom: 2rem;
@@ -284,6 +273,36 @@ export default component$(() => {
       font-size: .75rem;
       padding: .4rem 0;
       border-bottom: 1px solid #f3f4f6;
+    }
+
+    /* ── NFT Loading Animation ── */
+    .nft-loading {
+      position: absolute;
+      inset: 0;
+      background: rgba(107, 114, 128, 0.55); /* gray-500/55 */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: opacity 0.4s ease;
+    }
+
+    .nft-loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border: 6px solid #d1d5db;
+      border-top-color: rgba(107, 114, 128, 0.55);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     @media (max-width: 1024px) {
@@ -364,8 +383,15 @@ export default component$(() => {
           ...l,
           type: Number(l.balance) > 0 ? "token" : "trustline",
         }));
-      if (m.result?.transactions)
-        txs.value = m.result.transactions.map((t: any) => t.tx || t);
+      if (m.result?.transactions) {
+        txs.value = m.result.transactions.map((t: any) => {
+          const tx = t.tx || t;
+          return {
+            ...tx,
+            date: tx.date || new Date().toISOString(), // fallback to now
+          };
+        });
+      }
     };
 
     cleanup(() => ws.close());
@@ -386,14 +412,17 @@ export default component$(() => {
           id: 1,
           command: "account_nfts",
           account: debounced.value,
-          limit: 200, // increase if you want more NFTs loaded
+          limit: 200,
         }),
       );
     };
 
     ws.onmessage = async (e) => {
       const m = JSON.parse(e.data);
-      if (!m.result?.account_nfts) return;
+      if (!m.result?.account_nfts) {
+        nftLoaded.value = false;
+        return;
+      }
 
       const views: NFTView[] = [];
 
@@ -423,6 +452,14 @@ export default component$(() => {
       nfts.value = views;
       ws.close();
     };
+
+    ws.onerror = () => {
+      nftLoaded.value = false;
+    };
+
+    ws.onclose = () => {
+      nftLoaded.value = false;
+    };
   });
 
   /* ── Group NFTs by issuer + taxon ── */
@@ -438,7 +475,7 @@ export default component$(() => {
 
   /* ── Render ── */
   return (
-    <div class="page">
+    <div class="page mt-20">
       <div class="top">
         <div class="search">
           <select
@@ -578,16 +615,16 @@ export default component$(() => {
                     <span class="font-medium">{t.TransactionType}</span>
                     <span
                       class={
-                        t.meta.TransactionResult === "tesSUCCESS"
+                        t.meta?.TransactionResult === "tesSUCCESS"
                           ? "text-green-600"
                           : "text-red-600"
                       }
                     >
-                      {t.meta.TransactionResult}
+                      {t.meta?.TransactionResult || "unknown"}
                     </span>
                   </div>
                   <div class="text-sm text-gray-600 mt-1">
-                    {new Date(t.date).toLocaleString()}
+                    {new Date(t.date || new Date()).toLocaleString()}
                   </div>
                   <div class="text-sm mt-1">
                     From: {truncate(t.Account)} → To: {truncate(t.Destination)}
@@ -606,10 +643,17 @@ export default component$(() => {
       )}
 
       {tab.value === "nfts" && (
-        <div class="nft-wrap">
+        <div class="nft-wrap relative">
+          {/* Loading animation overlay */}
+          {!nftLoaded.value && (
+            <div class="nft-loading">
+              <div class="spinner"></div>
+            </div>
+          )}
+
           {collections().map(([label, items]) => (
             <div key={label} class="collection">
-              <h3>{label}</h3>
+              <h3>{label || "Unnamed Collection"}</h3>
               <div class="nft-grid">
                 {items.map((nft) => (
                   <div key={nft.id} class="nft">
@@ -618,6 +662,9 @@ export default component$(() => {
                       width={100}
                       src={nft.image}
                       loading="lazy"
+                      onError$={(e) => {
+                        (e.target as HTMLImageElement).src = FALLBACK_IMG;
+                      }}
                     />
                   </div>
                 ))}

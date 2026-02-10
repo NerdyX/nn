@@ -51,6 +51,8 @@ interface NFTView {
   issuer: string;
   taxon: number;
   image: string;
+  name?: string;
+  collection?: string;
 }
 
 // ────────────────────────────────────────────────
@@ -76,7 +78,6 @@ const formatAmount = (amt: any, native: string) => {
 const ipfsToHttp = (uri?: string) => {
   if (!uri) return FALLBACK_IMG;
 
-  // Handle hex-encoded URI from XRPL (most common case)
   if (uri.match(/^[0-9A-Fa-f]+$/)) {
     try {
       const bytes = new Uint8Array(
@@ -84,22 +85,17 @@ const ipfsToHttp = (uri?: string) => {
       );
       const decoded = new TextDecoder().decode(bytes).trim();
 
-      if (decoded.startsWith("ipfs://")) {
+      if (decoded.startsWith("ipfs://"))
         return `https://ipfs.io/ipfs/${decoded.slice(7)}`;
-      }
-      if (decoded.startsWith("https://") || decoded.startsWith("http://")) {
+      if (decoded.startsWith("https://") || decoded.startsWith("http://"))
         return decoded;
-      }
-      // Raw CID
-      if (decoded.startsWith("Qm") || decoded.startsWith("bafy")) {
+      if (decoded.startsWith("Qm") || decoded.startsWith("bafy"))
         return `https://ipfs.io/ipfs/${decoded}`;
-      }
     } catch (e) {
       console.warn("Failed to decode hex URI:", uri, e);
     }
   }
 
-  // Direct URI
   if (uri.startsWith("ipfs://")) return `https://ipfs.io/ipfs/${uri.slice(7)}`;
   if (uri.startsWith("https://") || uri.startsWith("http://")) return uri;
   if (uri.startsWith("Qm") || uri.startsWith("bafy"))
@@ -279,13 +275,23 @@ export default component$(() => {
     .nft-loading {
       position: absolute;
       inset: 0;
-      background: rgba(107, 114, 128, 0.55); /* gray-500/55 */
+      background: rgba(255, 255, 255, 0.8);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 10;
       transition: opacity 0.4s ease;
     }
+
+    .nft-wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+    }
+
 
     .nft-loading.hidden {
       opacity: 0;
@@ -295,8 +301,8 @@ export default component$(() => {
     .spinner {
       width: 56px;
       height: 56px;
-      border: 6px solid #d1d5db;
-      border-top-color: rgba(107, 114, 128, 0.55);
+      border: 6px solid #d1d5db; /* gray-300 border */
+      border-top-color: rgba(107, 114, 128, 0.55); /* gray-500/55 top */
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -309,10 +315,16 @@ export default component$(() => {
       .bento { grid-template-columns: 1fr; }
       .tokens { max-height: none; }
       .nft-grid { grid-template-columns: repeat(2, 1fr); }
+      .nft-wrap {
+          grid-template-columns: repeat(2, 1fr);
+        }
     }
 
     @media (max-width: 640px) {
       .nft-grid { grid-template-columns: 1fr; }
+      .nft-wrap {
+          grid-template-columns: 1fr;
+        }
     }
   `);
 
@@ -388,7 +400,7 @@ export default component$(() => {
           const tx = t.tx || t;
           return {
             ...tx,
-            date: tx.date || new Date().toISOString(), // fallback to now
+            date: tx.date || new Date().toISOString(),
           };
         });
       }
@@ -644,12 +656,7 @@ export default component$(() => {
 
       {tab.value === "nfts" && (
         <div class="nft-wrap relative">
-          {/* Loading animation overlay */}
-          {!nftLoaded.value && (
-            <div class="nft-loading">
-              <div class="spinner"></div>
-            </div>
-          )}
+          {/* No loading spinner as requested */}
 
           {collections().map(([label, items]) => (
             <div key={label} class="collection">
@@ -666,6 +673,7 @@ export default component$(() => {
                         (e.target as HTMLImageElement).src = FALLBACK_IMG;
                       }}
                     />
+                    <div class="nft-name">{nft.name || "Unnamed NFT"}</div>
                   </div>
                 ))}
               </div>

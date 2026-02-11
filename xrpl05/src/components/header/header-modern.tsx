@@ -27,8 +27,8 @@ export const HeaderModern = component$<HeaderProps>(() => {
   const isConnected = walletCtx.connected.value;
 
   const navItems = [
-    { label: "Explorer", href: "/explorer" },
-    { label: "Marketplace", href: "/marketplace" },
+    { label: "Explorer", href: "/search" },
+    { label: "Marketplace", href: "/shop" },
   ];
 
   // ── Xaman Connection ──

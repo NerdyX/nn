@@ -24,7 +24,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: "home",
     label: "Explorer",
-    href: "/explorer",
+    href: "/search",
     pages: ["*"],
     min: "mobile",
   },

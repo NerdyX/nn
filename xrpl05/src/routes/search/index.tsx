@@ -133,7 +133,7 @@ const getTokenIcon = (currency: string, issuer: string) => {
   }
 
   // Use a token icon service or return a default icon
-  return `https://xumm.app/avatar/${issuer}_${currency}.png`;
+  return `https://cdn.bithomp.com/issued-token/${issuer}/${currency}.png/jpeg/icon`;
 };
 
 const formatDate = (dateInput?: string | number) => {
@@ -867,6 +867,8 @@ export default component$(() => {
                     lines.value.map((l, i) => (
                       <div key={i} class="token-item">
                         <img
+                          height={100}
+                          width={100}
                           src={l.icon || FALLBACK_IMG}
                           alt={l.currency}
                           class="token-icon"

@@ -19,6 +19,9 @@ interface AccountRoot {
   EmailHash?: string;
   PreviousTxnID: string;
   PreviousTxnLgrSeq: number;
+  LedgerEntryType?: string;
+  RegularKey?: string;
+  index?: string;
   urlgravatar?: string;
 }
 
@@ -40,20 +43,14 @@ interface Transaction {
   date?: string;
 }
 
-interface NFToken {
-  NFTokenID: string;
-  Issuer: string;
-  URI?: string;
-  NFTokenTaxon: number;
-}
-
 interface NFTView {
   id: string;
+  nftokenId: string;
   issuer: string;
   taxon: number;
   image: string;
-  name?: string;
-  collection?: string;
+  name: string;
+  collection: string;
   description?: string;
   attributes?: Array<{ trait_type: string; value: any }>;
   uri?: string;
@@ -293,34 +290,54 @@ export default component$(() => {
 
     .nft-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 1.5rem;
     }
 
     .nft {
-      border-radius: 1rem;
+      border-radius: 1.5rem;
       overflow: hidden;
       border: 1px solid #e5e7eb;
       background: white;
-      transition: all 0.3s;
+      transition: all 0.3s ease;
       cursor: pointer;
     }
 
     .nft:hover {
-      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      border-color: #3b82f6;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.12);
       transform: translateY(-4px);
     }
 
     .nft-image-wrapper {
+      position: relative;
       aspect-ratio: 1 / 1;
       overflow: hidden;
-      background: #f9fafb;
+      background: #f3f4f6;
     }
 
     .nft-image-wrapper img {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+
+    .nft:hover .nft-image-wrapper img {
+      transform: scale(1.1);
+    }
+
+    .nft-badge {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      background: #3b82f6;
+      color: white;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 0.375rem 0.625rem;
+      border-radius: 9999px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
 
     .nft-info {
@@ -330,7 +347,7 @@ export default component$(() => {
 
     .nft-name {
       font-size: 0.9375rem;
-      font-weight: 600;
+      font-weight: 700;
       color: #111827;
       margin-bottom: 0.25rem;
       overflow: hidden;
@@ -339,11 +356,13 @@ export default component$(() => {
     }
 
     .nft-collection {
-      font-size: 0.8125rem;
-      color: #6b7280;
+      font-size: 0.75rem;
+      color: #3b82f6;
+      font-weight: 600;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      margin-top: 0.125rem;
     }
 
     /* NFT Modal */
@@ -444,7 +463,7 @@ export default component$(() => {
     .modal-details {
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
+      gap: 1rem;
     }
 
     .detail-section {
@@ -454,17 +473,38 @@ export default component$(() => {
     }
 
     .detail-label {
-      font-size: 0.75rem;
-      font-weight: 600;
+      font-size: 0.6875rem;
+      font-weight: 700;
       text-transform: uppercase;
       color: #6b7280;
       letter-spacing: 0.05em;
     }
 
     .detail-value {
-      font-size: 0.9375rem;
+      font-size: 0.875rem;
       color: #111827;
       word-break: break-all;
+      line-height: 1.5;
+    }
+
+    .detail-box {
+      background: #f9fafb;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    .detail-box .detail-label {
+      font-size: 0.6875rem;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+    }
+
+    .detail-box .detail-value {
+      font-size: 0.8125rem;
+      font-family: monospace;
+      font-weight: 500;
+      color: #374151;
     }
 
     .attributes-grid {
@@ -528,9 +568,6 @@ export default component$(() => {
       .square-card {
         aspect-ratio: auto;
       }
-      .nft-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
       .modal-grid {
         grid-template-columns: 1fr;
       }
@@ -538,7 +575,7 @@ export default component$(() => {
 
     @media (max-width: 768px) {
       .nft-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       }
       .attributes-grid {
         grid-template-columns: 1fr;
@@ -569,6 +606,7 @@ export default component$(() => {
   const nfts = useSignal<NFTView[]>([]);
   const nftLoaded = useSignal(false);
 
+  const searchQuery = useSignal("");
   const selectedCollection = useSignal<string | null>(null);
   const selectedNFT = useSignal<NFTView | null>(null);
 
@@ -631,8 +669,8 @@ export default component$(() => {
         const promises = m.result.account_nfts.map(async (nft: any) => {
           const metaUrl = ipfsToHttp(nft.URI);
           let image = FALLBACK_IMG;
-          let name: string | undefined;
-          let collection: string | undefined;
+          let name = "Unnamed NFT";
+          let collection = "Unknown Collection";
           let description: string | undefined;
           let attributes: Array<{ trait_type: string; value: any }> | undefined;
 
@@ -654,6 +692,7 @@ export default component$(() => {
 
           return {
             id: nft.NFTokenID,
+            nftokenId: nft.NFTokenID,
             issuer: nft.Issuer,
             taxon: nft.NFTokenTaxon,
             image,
@@ -680,8 +719,7 @@ export default component$(() => {
     const map = new Map<string, NFTView[]>();
 
     nfts.value.forEach((nft) => {
-      const key =
-        nft.collection || `${truncate(nft.issuer)} - Taxon ${nft.taxon}`;
+      const key = nft.collection;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(nft);
     });
@@ -691,15 +729,24 @@ export default component$(() => {
 
   // Get unique collection names for filtering
   const collectionNames = useComputed$(() => {
-    return Array.from(nftsByCollection.value.keys());
+    return Array.from(nftsByCollection.value.keys()).sort();
   });
 
-  // Filter NFTs based on selected collection
+  // Filtered NFTs
   const filteredNFTs = useComputed$(() => {
-    if (!selectedCollection.value) {
-      return nfts.value;
-    }
-    return nftsByCollection.value.get(selectedCollection.value) || [];
+    return nfts.value.filter((nft) => {
+      const q = searchQuery.value.toLowerCase();
+      const matchesSearch =
+        !q ||
+        nft.name.toLowerCase().includes(q) ||
+        nft.collection.toLowerCase().includes(q) ||
+        nft.nftokenId.toLowerCase().includes(q) ||
+        nft.issuer.toLowerCase().includes(q);
+      const matchesCollection =
+        !selectedCollection.value ||
+        nft.collection === selectedCollection.value;
+      return matchesSearch && matchesCollection;
+    });
   });
 
   return (
@@ -727,40 +774,257 @@ export default component$(() => {
                     <div>Loading...</div>
                   ) : (
                     <div>
-                      <img
-                        src={account.value.urlgravatar || FALLBACK_IMG}
-                        alt="Avatar"
-                        width={120}
-                        height={120}
-                        style={{ borderRadius: "50%", marginBottom: "1rem" }}
-                      />
-                      <p style={{ marginBottom: "0.5rem" }}>
-                        <strong>Address:</strong> <br />
+                      {account.value.urlgravatar && (
+                        <img
+                          src={account.value.urlgravatar}
+                          alt="Avatar"
+                          width={100}
+                          height={100}
+                          style={{
+                            borderRadius: "50%",
+                            marginBottom: "1rem",
+                            display: "block",
+                          }}
+                        />
+                      )}
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          ACCOUNT
+                        </strong>
                         <span
                           style={{
-                            fontSize: "0.875rem",
+                            fontSize: "0.8125rem",
                             wordBreak: "break-all",
+                            display: "block",
                           }}
                         >
                           {account.value.Account}
                         </span>
-                      </p>
-                      <p style={{ marginBottom: "0.5rem" }}>
-                        <strong>Balance:</strong>{" "}
-                        {formatAmount(
-                          account.value.Balance,
-                          network.value === "xrpl" ? "XRP" : "XAH",
-                        )}
-                      </p>
-                      <p style={{ marginBottom: "0.5rem" }}>
-                        <strong>Owner Count:</strong> {account.value.OwnerCount}
-                      </p>
-                      <p style={{ marginBottom: "0.5rem" }}>
-                        <strong>Sequence:</strong> {account.value.Sequence}
-                      </p>
-                      <p>
-                        <strong>Flags:</strong> {account.value.Flags}
-                      </p>
+                      </div>
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          BALANCE
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {formatAmount(
+                            account.value.Balance,
+                            network.value === "xrpl" ? "XRP" : "XAH",
+                          )}
+                        </span>
+                      </div>
+
+                      {account.value.Domain && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            DOMAIN
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.875rem",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {account.value.Domain}
+                          </span>
+                        </div>
+                      )}
+
+                      {account.value.EmailHash && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            EMAIL HASH
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.8125rem",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {account.value.EmailHash}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          FLAGS
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {account.value.Flags}
+                        </span>
+                      </div>
+
+                      {account.value.LedgerEntryType && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            LEDGER ENTRY TYPE
+                          </strong>
+                          <span style={{ fontSize: "0.875rem" }}>
+                            {account.value.LedgerEntryType}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          OWNER COUNT
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {account.value.OwnerCount}
+                        </span>
+                      </div>
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          PREVIOUS TXN ID
+                        </strong>
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            wordBreak: "break-all",
+                            display: "block",
+                          }}
+                        >
+                          {account.value.PreviousTxnID}
+                        </span>
+                      </div>
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          PREVIOUS TXN LEDGER SEQ
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {account.value.PreviousTxnLgrSeq}
+                        </span>
+                      </div>
+
+                      {account.value.RegularKey && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            REGULAR KEY
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.8125rem",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {account.value.RegularKey}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          SEQUENCE
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {account.value.Sequence}
+                        </span>
+                      </div>
+
+                      {account.value.index && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            INDEX
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              wordBreak: "break-all",
+                              display: "block",
+                            }}
+                          >
+                            {account.value.index}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -857,8 +1121,10 @@ export default component$(() => {
                     {collectionNames.value.map((collectionName) => (
                       <option key={collectionName} value={collectionName}>
                         {collectionName} (
-                        {nftsByCollection.value.get(collectionName)?.length ||
-                          0}
+                        {String(
+                          nftsByCollection.value.get(collectionName)?.length ||
+                            0,
+                        )}
                         )
                       </option>
                     ))}
@@ -887,19 +1153,23 @@ export default component$(() => {
                       >
                         <div class="nft-image-wrapper">
                           <img
+                            height="100"
+                            width="100"
                             src={nft.image}
-                            alt={nft.name || "NFT"}
+                            alt={nft.name}
                             loading="lazy"
+                            onError$={(e: any) => {
+                              e.target.src =
+                                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='%23e5e7eb'%3E%3Crect width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='48' fill='%239ca3af'%3ENFT%3C/text%3E%3C/svg%3E";
+                            }}
                           />
+                          {nft.collection !== "Unknown Collection" && (
+                            <div class="nft-badge">{nft.collection}</div>
+                          )}
                         </div>
                         <div class="nft-info">
-                          <div class="nft-name">
-                            {nft.name || "Unnamed NFT"}
-                          </div>
-                          <div class="nft-collection">
-                            {nft.collection ||
-                              `${truncate(nft.issuer)} - Taxon ${nft.taxon}`}
-                          </div>
+                          <h3 class="nft-name">{nft.name}</h3>
+                          <div class="nft-collection">{nft.collection}</div>
                         </div>
                       </div>
                     ))}
@@ -917,9 +1187,7 @@ export default component$(() => {
             >
               <div class="modal-content" onClick$={(e) => e.stopPropagation()}>
                 <div class="modal-header">
-                  <div class="modal-title">
-                    {selectedNFT.value.name || "NFT Details"}
-                  </div>
+                  <div class="modal-title">{selectedNFT.value.name}</div>
                   <button
                     class="modal-close"
                     onClick$={() => (selectedNFT.value = null)}
@@ -932,21 +1200,25 @@ export default component$(() => {
                   <div class="modal-grid">
                     <div>
                       <img
+                        height="100"
+                        width="100"
                         src={selectedNFT.value.image}
-                        alt={selectedNFT.value.name || "NFT"}
+                        alt={selectedNFT.value.name}
                         class="modal-image"
+                        onError$={(e: any) => {
+                          e.target.src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='%23e5e7eb'%3E%3Crect width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='48' fill='%239ca3af'%3ENFT%3C/text%3E%3C/svg%3E";
+                        }}
                       />
                     </div>
 
                     <div class="modal-details">
-                      {selectedNFT.value.collection && (
-                        <div class="detail-section">
-                          <div class="detail-label">Collection</div>
-                          <div class="detail-value">
-                            {selectedNFT.value.collection}
-                          </div>
+                      <div class="detail-section">
+                        <div class="detail-label">Collection</div>
+                        <div class="detail-value">
+                          {selectedNFT.value.collection}
                         </div>
-                      )}
+                      </div>
 
                       {selectedNFT.value.description && (
                         <div class="detail-section">
@@ -957,40 +1229,51 @@ export default component$(() => {
                         </div>
                       )}
 
-                      <div class="detail-section">
-                        <div class="detail-label">Token ID</div>
-                        <div
-                          class="detail-value"
-                          style={{ fontSize: "0.8125rem" }}
-                        >
-                          {selectedNFT.value.id}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "0.75rem",
+                          marginTop: "0.5rem",
+                        }}
+                      >
+                        <div class="detail-box">
+                          <div class="detail-label">Issuer</div>
+                          <div
+                            class="detail-value"
+                            style={{ fontSize: "0.6875rem" }}
+                          >
+                            {truncate(selectedNFT.value.issuer)}
+                          </div>
+                        </div>
+                        <div class="detail-box">
+                          <div class="detail-label">Taxon</div>
+                          <div class="detail-value">
+                            {selectedNFT.value.taxon}
+                          </div>
                         </div>
                       </div>
 
-                      <div class="detail-section">
-                        <div class="detail-label">Issuer</div>
+                      <div class="detail-box" style={{ marginTop: "0.25rem" }}>
+                        <div class="detail-label">NFToken ID</div>
                         <div
                           class="detail-value"
-                          style={{ fontSize: "0.8125rem" }}
+                          style={{ fontSize: "0.625rem" }}
                         >
-                          {selectedNFT.value.issuer}
-                        </div>
-                      </div>
-
-                      <div class="detail-section">
-                        <div class="detail-label">Taxon</div>
-                        <div class="detail-value">
-                          {selectedNFT.value.taxon}
+                          {selectedNFT.value.nftokenId}
                         </div>
                       </div>
 
                       {selectedNFT.value.uri && (
-                        <div class="detail-section">
+                        <div
+                          class="detail-section"
+                          style={{ marginTop: "0.5rem" }}
+                        >
                           <div class="detail-label">Metadata URI</div>
                           <div
                             class="detail-value"
                             style={{
-                              fontSize: "0.75rem",
+                              fontSize: "0.6875rem",
                               wordBreak: "break-all",
                             }}
                           >
@@ -1003,7 +1286,9 @@ export default component$(() => {
                                 textDecoration: "underline",
                               }}
                             >
-                              {selectedNFT.value.uri}
+                              {selectedNFT.value.uri.length > 60
+                                ? selectedNFT.value.uri.substring(0, 60) + "..."
+                                : selectedNFT.value.uri}
                             </a>
                           </div>
                         </div>
@@ -1011,7 +1296,10 @@ export default component$(() => {
 
                       {selectedNFT.value.attributes &&
                         selectedNFT.value.attributes.length > 0 && (
-                          <div class="detail-section">
+                          <div
+                            class="detail-section"
+                            style={{ marginTop: "0.5rem" }}
+                          >
                             <div class="detail-label">Attributes</div>
                             <div class="attributes-grid">
                               {selectedNFT.value.attributes.map((attr, i) => (

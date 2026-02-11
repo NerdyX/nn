@@ -128,17 +128,17 @@ export default component$(() => {
       {/* Hero Section */}
       <section class="relative w-full flex-1 overflow-hidden flex items-center justify-center pt-20 pb-20">
         {/* Glassmorphic Background Gradient */}
-        <div class="absolute inset-0 bg-gradient-to-br from-white via-blue-50/40 to-white"></div>
+        <div class="absolute inset-0 bg-linear-to-br from-white via-blue-50/40 to-white"></div>
 
         {/* Animated Background Blobs */}
         <div class="absolute inset-0 overflow-hidden">
-          <div class="floating-element absolute -top-32 -right-32 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-transparent rounded-full blur-3xl"></div>
+          <div class="floating-element absolute -top-32 -right-32 w-96 h-96 bg-linear-to-br from-blue-400/20 to-transparent rounded-full blur-3xl"></div>
           <div
-            class="floating-element absolute -bottom-32 -left-32 w-96 h-96 bg-gradient-to-br from-amber-400/20 to-transparent rounded-full blur-3xl"
+            class="floating-element absolute -bottom-32 -left-32 w-96 h-96 bg-gradientlinear-to-br from-amber-400/20 to-transparent rounded-full blur-3xl"
             style={{ animationDelay: "-2s" }}
           ></div>
           <div
-            class="floating-element absolute top-1/3 right-1/4 w-80 h-80 bg-gradient-to-br from-blue-300/10 to-transparent rounded-full blur-3xl"
+            class="floating-element absolute top-1/3 right-1/4 w-80 h-80 bg-linear-to-br from-blue-300/10 to-transparent rounded-full blur-3xl"
             style={{ animationDelay: "-1s" }}
           ></div>
         </div>
@@ -155,7 +155,7 @@ export default component$(() => {
           </div>
 
           {/* Main Title */}
-          <h1 class="hero-title text-5xl sm:text-6xl lg:text-7xl font-bold bg-gradient-to-r from-blue-600 via-blue-600 to-amber-500 bg-clip-text text-transparent leading-tight tracking-tight mb-6">
+          <h1 class="hero-title text-5xl sm:text-6xl lg:text-9xl font-bold bg-linear-to-r from-blue-600 via-blue-600 to-amber-500 bg-clip-text text-transparent leading-tight tracking-tight mb-6">
             {"{XRPL}"}OS
           </h1>
 
@@ -170,16 +170,6 @@ export default component$(() => {
             assets across XRP Ledger and Xahau networks. Enterprise-grade
             security meets intuitive design.
           </p>
-
-          {/* CTA Buttons */}
-          <div class="hero-button flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <button class="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-blue-500/30 glow-element">
-              Launch Dashboard
-            </button>
-            <button class="px-8 py-4 bg-white hover:bg-gray-50 text-gray-900 font-semibold rounded-xl border-2 border-gray-200 hover:border-gray-300 transition-all duration-300 shadow-md hover:shadow-lg">
-              Learn More
-            </button>
-          </div>
 
           {/* Feature Cards */}
           <div class="hero-cards mt-16 w-full">
@@ -257,12 +247,12 @@ export default component$(() => {
       </section>
 
       {/* Three Networks Section */}
-      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50">
+      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-white to-gray-50">
         <div class="max-w-7xl mx-auto">
           <div class="text-center mb-16">
             <h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4 leading-tight">
               Three Networks.
-              <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-amber-500">
+              <span class="text-transparent bg-clip-text bg-linear-to-r from-blue-600 to-amber-500">
                 {" "}
                 One Platform.
               </span>
@@ -279,7 +269,7 @@ export default component$(() => {
                 key={index}
                 class="group relative glass rounded-2xl p-8 border border-white/40 hover:border-blue-300/50 transition-all duration-500 hover:shadow-xl hover:shadow-blue-500/10 overflow-hidden"
               >
-                <div class="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-600/0 group-hover:from-blue-500/5 group-hover:to-blue-600/5 transition-all duration-500"></div>
+                <div class="absolute inset-0 bg-linear-to-br from-blue-500/0 to-blue-600/0 group-hover:from-blue-500/5 group-hover:to-blue-600/5 transition-all duration-500"></div>
                 <div class="relative z-10">
                   <h3 class="text-3xl font-bold text-gray-900 mb-4 group-hover:text-blue-600 transition-colors">
                     {n.title}
@@ -288,7 +278,7 @@ export default component$(() => {
                     {n.description}
                   </p>
                 </div>
-                <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
+                <div class="absolute bottom-0 left-0 w-full h-1 bg-linear-to-r from-blue-500 to-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
               </div>
             ))}
           </div>
@@ -296,7 +286,7 @@ export default component$(() => {
       </section>
 
       {/* Philosophy Section */}
-      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
+      <section class="relative w-full py-20 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-gray-50 to-white">
         <div class="max-w-4xl mx-auto">
           <div class="glass rounded-3xl p-12 border border-white/40 shadow-2xl hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-500">
             <div class="mb-8">
@@ -325,14 +315,14 @@ export default component$(() => {
       </section>
 
       {/* Footer */}
-      <footer class="bg-gradient-to-b from-white to-gray-50 text-gray-600 border-t border-gray-200">
+      <footer class="bg-linear-to-b from-white to-gray-50 text-gray-600 border-t border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-12 mb-12">
             <div class="lg:col-span-2">
               <div class="mb-4">
                 <a
                   href="/"
-                  class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
+                  class="text-2xl font-bold bg-linear-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
                   aria-label="logo"
                 >
                   {"{XRPL}"}OS

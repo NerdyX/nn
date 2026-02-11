@@ -4,7 +4,10 @@ import {
   useTask$,
   useStylesScoped$,
   useComputed$,
+  $,
 } from "@builder.io/qwik";
+import { useWalletContext, truncateAddress } from "~/context/wallet-context";
+import { useNetworkContext, NETWORK_CONFIG } from "~/context/network-context";
 
 // ────────────────────────────────────────────────
 // Types
@@ -25,6 +28,34 @@ interface AccountRoot {
   urlgravatar?: string;
 }
 
+interface SellOffer {
+  index: string;
+  amount: string | { value: string; currency: string; issuer: string };
+  owner: string;
+  destination?: string;
+  expiration?: number;
+}
+
+interface BuyOffer {
+  index: string;
+  amount: string | { value: string; currency: string; issuer: string };
+  owner: string;
+  expiration?: number;
+}
+
+interface MarketplaceData {
+  success: boolean;
+  network: string;
+  address: string;
+  balance: string;
+  totalNfts: number;
+  listedCount: number;
+  totalSellOffers: number;
+  totalBuyOffers: number;
+  nfts: NftItem[];
+  queriedAt: string;
+}
+
 interface TokenLine {
   currency: string;
   balance: string;
@@ -43,26 +74,32 @@ interface Transaction {
   date?: string;
 }
 
-interface NFTView {
-  id: string;
+interface NftItem {
   nftokenId: string;
   issuer: string;
+  owner: string;
   taxon: number;
+  serial: number;
+  uri: string;
+  resolvedUri: string;
   image: string;
   name: string;
+  description: string;
   collection: string;
-  description?: string;
-  attributes?: Array<{ trait_type: string; value: any }>;
-  uri?: string;
+  flags: number;
+  transferFee: number;
+  sellOffers: SellOffer[];
+  buyOffers: BuyOffer[];
 }
 
 // ────────────────────────────────────────────────
-// Helpers
+// Helper Functions
 // ────────────────────────────────────────────────
 const XRPL_WS = "wss://xrplcluster.com";
 const XAHAU_WS = "wss://xahau.network";
-
 const FALLBACK_IMG = "https://placehold.co/400x400/eeeeee/999999?text=NFT";
+const PLACEHOLDER_IMG =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='%23e5e7eb'%3E%3Crect width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='48' fill='%239ca3af'%3ENFT%3C/text%3E%3C/svg%3E";
 
 const truncate = (v?: string) => (v ? `${v.slice(0, 6)}…${v.slice(-6)}` : "—");
 
@@ -105,10 +142,57 @@ const ipfsToHttp = (uri?: string) => {
   return FALLBACK_IMG;
 };
 
+function getLowestSellPrice(
+  offers: SellOffer[],
+  nativeCurrency: string,
+): string | null {
+  if (!offers.length) return null;
+  let lowest = Infinity;
+  let lowestFormatted = "";
+  for (const o of offers) {
+    const val =
+      typeof o.amount === "string"
+        ? Number(o.amount) / 1_000_000
+        : Number(o.amount.value);
+    if (val < lowest) {
+      lowest = val;
+      lowestFormatted = formatAmount(o.amount, nativeCurrency);
+    }
+  }
+  return lowestFormatted;
+}
+
+function getHighestBuyPrice(
+  offers: BuyOffer[],
+  nativeCurrency: string,
+): string | null {
+  if (!offers.length) return null;
+  let highest = -Infinity;
+  let highestFormatted = "";
+  for (const o of offers) {
+    const val =
+      typeof o.amount === "string"
+        ? Number(o.amount) / 1_000_000
+        : Number(o.amount.value);
+    if (val > highest) {
+      highest = val;
+      highestFormatted = formatAmount(o.amount, nativeCurrency);
+    }
+  }
+  return highestFormatted;
+}
+
 // ────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────
 export default component$(() => {
+  const wallet = useWalletContext();
+  const { activeNetwork } = useNetworkContext();
+  const networkConfig = useComputed$(() => NETWORK_CONFIG[activeNetwork.value]);
+  const nativeCurrency = useComputed$(() =>
+    activeNetwork.value === "xrpl" ? "XRP" : "XAH",
+  );
+
   useStylesScoped$(`
     :root { --gap: 20px; }
 
@@ -229,36 +313,6 @@ export default component$(() => {
       background: #f9fafb;
     }
 
-    /* NFT Dropdown Filter */
-    .nft-filter-dropdown {
-      padding: 1rem 1.5rem;
-      border-bottom: 1px solid #e5e7eb;
-      background: #fafbfc;
-    }
-
-    .filter-select {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      border-radius: 0.5rem;
-      border: 1px solid #d1d5db;
-      background: white;
-      font-size: 0.9375rem;
-      font-weight: 500;
-      color: #374151;
-      cursor: pointer;
-      outline: none;
-      transition: all 0.2s;
-    }
-
-    .filter-select:hover {
-      border-color: #3b82f6;
-    }
-
-    .filter-select:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
     /* NFT Card - Scrollable */
     .nft-card-wrapper {
       grid-column: 1 / -1;
@@ -294,250 +348,6 @@ export default component$(() => {
       gap: 1.5rem;
     }
 
-    .nft {
-      border-radius: 1.5rem;
-      overflow: hidden;
-      border: 1px solid #e5e7eb;
-      background: white;
-      transition: all 0.3s ease;
-      cursor: pointer;
-    }
-
-    .nft:hover {
-      border-color: #3b82f6;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.12);
-      transform: translateY(-4px);
-    }
-
-    .nft-image-wrapper {
-      position: relative;
-      aspect-ratio: 1 / 1;
-      overflow: hidden;
-      background: #f3f4f6;
-    }
-
-    .nft-image-wrapper img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transition: transform 0.5s ease;
-    }
-
-    .nft:hover .nft-image-wrapper img {
-      transform: scale(1.1);
-    }
-
-    .nft-badge {
-      position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-      background: #3b82f6;
-      color: white;
-      font-size: 0.6875rem;
-      font-weight: 700;
-      padding: 0.375rem 0.625rem;
-      border-radius: 9999px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-
-    .nft-info {
-      padding: 1rem;
-      background: white;
-    }
-
-    .nft-name {
-      font-size: 0.9375rem;
-      font-weight: 700;
-      color: #111827;
-      margin-bottom: 0.25rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .nft-collection {
-      font-size: 0.75rem;
-      color: #3b82f6;
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      margin-top: 0.125rem;
-    }
-
-    /* NFT Modal */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      padding: 2rem;
-      animation: fadeIn 0.2s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    .modal-content {
-      background: white;
-      border-radius: 1.5rem;
-      max-width: 900px;
-      width: 100%;
-      max-height: 90vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-      animation: slideUp 0.3s ease-out;
-    }
-
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .modal-header {
-      padding: 1.5rem 2rem;
-      border-bottom: 1px solid #e5e7eb;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #f9fafb;
-    }
-
-    .modal-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: #111827;
-    }
-
-    .modal-close {
-      width: 2.5rem;
-      height: 2.5rem;
-      border-radius: 0.5rem;
-      border: none;
-      background: white;
-      color: #6b7280;
-      font-size: 1.5rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-
-    .modal-close:hover {
-      background: #f3f4f6;
-      color: #111827;
-    }
-
-    .modal-body {
-      padding: 2rem;
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    .modal-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 2rem;
-    }
-
-    .modal-image {
-      width: 100%;
-      border-radius: 1rem;
-      border: 1px solid #e5e7eb;
-    }
-
-    .modal-details {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .detail-section {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .detail-label {
-      font-size: 0.6875rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: #6b7280;
-      letter-spacing: 0.05em;
-    }
-
-    .detail-value {
-      font-size: 0.875rem;
-      color: #111827;
-      word-break: break-all;
-      line-height: 1.5;
-    }
-
-    .detail-box {
-      background: #f9fafb;
-      border-radius: 0.75rem;
-      padding: 0.75rem;
-      border: 1px solid #e5e7eb;
-    }
-
-    .detail-box .detail-label {
-      font-size: 0.6875rem;
-      color: #6b7280;
-      margin-bottom: 0.25rem;
-    }
-
-    .detail-box .detail-value {
-      font-size: 0.8125rem;
-      font-family: monospace;
-      font-weight: 500;
-      color: #374151;
-    }
-
-    .attributes-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.75rem;
-      margin-top: 0.5rem;
-    }
-
-    .attribute-card {
-      padding: 0.75rem;
-      background: #f9fafb;
-      border-radius: 0.5rem;
-      border: 1px solid #e5e7eb;
-    }
-
-    .attribute-label {
-      font-size: 0.75rem;
-      color: #6b7280;
-      margin-bottom: 0.25rem;
-    }
-
-    .attribute-value {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: #111827;
-    }
-
-    .nft-loading-state {
-      text-align: center;
-      padding: 4rem 0;
-    }
-
     .spinner {
       width: 56px;
       height: 56px;
@@ -552,12 +362,6 @@ export default component$(() => {
       to { transform: rotate(360deg); }
     }
 
-    .empty-state {
-      text-align: center;
-      padding: 3rem 0;
-      color: #6b7280;
-    }
-
     @media (max-width: 1024px) {
       .bento {
         grid-template-columns: 1fr;
@@ -568,17 +372,11 @@ export default component$(() => {
       .square-card {
         aspect-ratio: auto;
       }
-      .modal-grid {
-        grid-template-columns: 1fr;
-      }
     }
 
     @media (max-width: 768px) {
       .nft-grid {
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      }
-      .attributes-grid {
-        grid-template-columns: 1fr;
       }
     }
 
@@ -586,35 +384,72 @@ export default component$(() => {
       .nft-grid {
         grid-template-columns: 1fr;
       }
-      .modal-overlay {
-        padding: 1rem;
-      }
-      .modal-body {
-        padding: 1.5rem;
-      }
     }
   `);
 
+  // Search state
   const query = useSignal("");
   const debounced = useSignal("");
   const network = useSignal<"xrpl" | "xahau">("xrpl");
 
+  // Account data
   const account = useSignal<AccountRoot | null>(null);
   const lines = useSignal<TokenLine[]>([]);
   const txs = useSignal<Transaction[]>([]);
 
-  const nfts = useSignal<NFTView[]>([]);
-  const nftLoaded = useSignal(false);
+  // NFT data
+  const nfts = useSignal<NftItem[]>([]);
+  const loading = useSignal(false);
+  const errorMsg = useSignal("");
+  const marketData = useSignal<MarketplaceData | null>(null);
 
+  // Search / filter state
   const searchQuery = useSignal("");
   const selectedCollection = useSignal<string | null>(null);
-  const selectedNFT = useSignal<NFTView | null>(null);
+  const currentPage = useSignal(1);
+  const pageSize = 12;
+
+  // Modal state
+  const selectedNft = useSignal<NftItem | null>(null);
+  const showOfferModal = useSignal(false);
+  const offerAmount = useSignal("");
 
   /* ── Debounce search ── */
   useTask$(({ track, cleanup }) => {
     track(() => query.value);
     const t = setTimeout(() => (debounced.value = query.value.trim()), 500);
     cleanup(() => clearTimeout(t));
+  });
+
+  // ── Fetch NFTs from API ──
+  const fetchNfts = $(async (address: string) => {
+    if (!address) return;
+    loading.value = true;
+    errorMsg.value = "";
+
+    try {
+      const res = await fetch(
+        `/api/marketplace?network=${activeNetwork.value}&address=${address}&limit=100`,
+      );
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(
+          (errData as any).message || `Failed to fetch NFTs (${res.status})`,
+        );
+      }
+
+      const data: MarketplaceData = await res.json();
+      marketData.value = data;
+      nfts.value = data.nfts;
+      currentPage.value = 1;
+    } catch (err: any) {
+      errorMsg.value = err.message || "Failed to fetch NFT data";
+      nfts.value = [];
+      marketData.value = null;
+    } finally {
+      loading.value = false;
+    }
   });
 
   /* ── Load data when address changes ── */
@@ -626,11 +461,14 @@ export default component$(() => {
     lines.value = [];
     txs.value = [];
     nfts.value = [];
-    nftLoaded.value = false;
-    selectedCollection.value = null;
+    marketData.value = null;
 
     const addr = debounced.value;
 
+    // Fetch NFTs via API
+    fetchNfts(addr);
+
+    // Fetch account info via WebSocket
     const ws = new WebSocket(network.value === "xrpl" ? XRPL_WS : XAHAU_WS);
     let id = 1;
 
@@ -649,14 +487,6 @@ export default component$(() => {
           limit: 50,
         }),
       );
-      ws.send(
-        JSON.stringify({
-          id: id++,
-          command: "account_nfts",
-          account: addr,
-          limit: 200,
-        }),
-      );
     };
 
     ws.onmessage = (e) => {
@@ -665,75 +495,13 @@ export default component$(() => {
       if (m.result?.lines) lines.value = m.result.lines;
       if (m.result?.transactions)
         txs.value = m.result.transactions.map((t: any) => t.tx || t);
-      if (m.result?.account_nfts) {
-        const promises = m.result.account_nfts.map(async (nft: any) => {
-          const metaUrl = ipfsToHttp(nft.URI);
-          let image = FALLBACK_IMG;
-          let name = "Unnamed NFT";
-          let collection = "Unknown Collection";
-          let description: string | undefined;
-          let attributes: Array<{ trait_type: string; value: any }> | undefined;
-
-          if (metaUrl && metaUrl !== FALLBACK_IMG) {
-            try {
-              const meta: any = await fetch(metaUrl).then((r) => r.json());
-              if (meta.image) image = ipfsToHttp(meta.image) || FALLBACK_IMG;
-              if (meta.name) name = meta.name;
-              if (meta.collection) collection = meta.collection;
-              // Some metadata uses "collection_name" instead
-              if (!collection && meta.collection_name)
-                collection = meta.collection_name;
-              if (meta.description) description = meta.description;
-              if (meta.attributes) attributes = meta.attributes;
-            } catch (err) {
-              console.warn("Failed to fetch NFT metadata:", metaUrl, err);
-            }
-          }
-
-          return {
-            id: nft.NFTokenID,
-            nftokenId: nft.NFTokenID,
-            issuer: nft.Issuer,
-            taxon: nft.NFTokenTaxon,
-            image,
-            name,
-            collection,
-            description,
-            attributes,
-            uri: metaUrl,
-          };
-        });
-
-        Promise.all(promises).then((views) => {
-          nfts.value = views;
-          nftLoaded.value = true;
-        });
-      }
     };
 
     cleanup(() => ws.close());
   });
 
-  // Group NFTs by collection
-  const nftsByCollection = useComputed$(() => {
-    const map = new Map<string, NFTView[]>();
-
-    nfts.value.forEach((nft) => {
-      const key = nft.collection;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(nft);
-    });
-
-    return map;
-  });
-
-  // Get unique collection names for filtering
-  const collectionNames = useComputed$(() => {
-    return Array.from(nftsByCollection.value.keys()).sort();
-  });
-
   // Filtered NFTs
-  const filteredNFTs = useComputed$(() => {
+  const filtered = useComputed$(() => {
     return nfts.value.filter((nft) => {
       const q = searchQuery.value.toLowerCase();
       const matchesSearch =
@@ -742,11 +510,38 @@ export default component$(() => {
         nft.collection.toLowerCase().includes(q) ||
         nft.nftokenId.toLowerCase().includes(q) ||
         nft.issuer.toLowerCase().includes(q);
+
       const matchesCollection =
         !selectedCollection.value ||
         nft.collection === selectedCollection.value;
+
       return matchesSearch && matchesCollection;
     });
+  });
+
+  // Paginated NFTs
+  const paginated = useComputed$(() => {
+    const start = (currentPage.value - 1) * pageSize;
+    return filtered.value.slice(start, start + pageSize);
+  });
+
+  // Unique collections
+  const collections = useComputed$(() => {
+    const cols = new Set<string>();
+    nfts.value.forEach((n) => {
+      if (n.collection) cols.add(n.collection);
+    });
+    return Array.from(cols).sort();
+  });
+
+  const totalPages = useComputed$(() =>
+    Math.max(1, Math.ceil(filtered.value.length / pageSize)),
+  );
+
+  // Buy handler (placeholder)
+  const handleBuy = $((nft: NftItem, offer: SellOffer) => {
+    console.log("Buy NFT:", nft.nftokenId, "Offer:", offer.index);
+    // Implement buy logic here
   });
 
   return (
@@ -852,140 +647,6 @@ export default component$(() => {
                         </div>
                       )}
 
-                      {account.value.EmailHash && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            EMAIL HASH
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.8125rem",
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            {account.value.EmailHash}
-                          </span>
-                        </div>
-                      )}
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          FLAGS
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {account.value.Flags}
-                        </span>
-                      </div>
-
-                      {account.value.LedgerEntryType && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            LEDGER ENTRY TYPE
-                          </strong>
-                          <span style={{ fontSize: "0.875rem" }}>
-                            {account.value.LedgerEntryType}
-                          </span>
-                        </div>
-                      )}
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          OWNER COUNT
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {account.value.OwnerCount}
-                        </span>
-                      </div>
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          PREVIOUS TXN ID
-                        </strong>
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            wordBreak: "break-all",
-                            display: "block",
-                          }}
-                        >
-                          {account.value.PreviousTxnID}
-                        </span>
-                      </div>
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          PREVIOUS TXN LEDGER SEQ
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {account.value.PreviousTxnLgrSeq}
-                        </span>
-                      </div>
-
-                      {account.value.RegularKey && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            REGULAR KEY
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.8125rem",
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            {account.value.RegularKey}
-                          </span>
-                        </div>
-                      )}
-
                       <div style={{ marginBottom: "0.75rem" }}>
                         <strong
                           style={{
@@ -1001,30 +662,6 @@ export default component$(() => {
                           {account.value.Sequence}
                         </span>
                       </div>
-
-                      {account.value.index && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            INDEX
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.75rem",
-                              wordBreak: "break-all",
-                              display: "block",
-                            }}
-                          >
-                            {account.value.index}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1100,227 +737,318 @@ export default component$(() => {
               </div>
             </div>
 
-            {/* NFTs Card - full width with dropdown filtering */}
+            {/* NFTs Card - full width with dropdown filtering and pagination */}
             <div class="card nft-card-wrapper">
               <div class="header">NFTs ({nfts.value.length})</div>
 
-              {/* Dropdown Filter */}
-              {nftLoaded.value && nfts.value.length > 0 && (
-                <div class="nft-filter-dropdown">
-                  <select
-                    class="filter-select"
-                    value={selectedCollection.value || ""}
-                    onChange$={(e) => {
-                      const val = (e.target as HTMLSelectElement).value;
-                      selectedCollection.value = val === "" ? null : val;
-                    }}
-                  >
-                    <option value="">
-                      All Collections ({nfts.value.length})
-                    </option>
-                    {collectionNames.value.map((collectionName) => (
-                      <option key={collectionName} value={collectionName}>
-                        {collectionName} (
-                        {String(
-                          nftsByCollection.value.get(collectionName)?.length ||
-                            0,
-                        )}
-                        )
-                      </option>
-                    ))}
-                  </select>
+              {/* Filters */}
+              {nfts.value.length > 0 && (
+                <div class="flex flex-col sm:flex-row gap-3 mb-6 px-6 pt-4">
+                  <input
+                    type="text"
+                    placeholder="Filter by name, collection, ID..."
+                    class="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    value={searchQuery.value}
+                    onInput$={(e) =>
+                      (searchQuery.value = (e.target as HTMLInputElement).value)
+                    }
+                  />
+                  {collections.value.length > 0 && (
+                    <select
+                      class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      value={selectedCollection.value || ""}
+                      onChange$={(e) =>
+                        (selectedCollection.value =
+                          (e.target as HTMLSelectElement).value || null)
+                      }
+                    >
+                      <option value="">All Collections</option>
+                      {collections.value.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {(searchQuery.value || selectedCollection.value) && (
+                    <button
+                      class="px-4 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition"
+                      onClick$={() => {
+                        searchQuery.value = "";
+                        selectedCollection.value = null;
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Loading */}
+              {loading.value && (
+                <div class="flex items-center justify-center py-20">
+                  <div class="spinner" />
+                  <span class="ml-4 text-gray-500">
+                    Fetching NFTs from the ledger...
+                  </span>
                 </div>
               )}
 
               {/* Scrollable NFT Body */}
-              <div class="nft-scroll-body">
-                {!nftLoaded.value ? (
-                  <div class="nft-loading-state">
-                    <div class="spinner" />
-                    <p style={{ marginTop: "1rem", color: "#6b7280" }}>
-                      Loading NFTs...
-                    </p>
-                  </div>
-                ) : nfts.value.length === 0 ? (
-                  <div class="empty-state">No NFTs found</div>
-                ) : (
+              {!loading.value && paginated.value.length > 0 && (
+                <div class="nft-scroll-body">
                   <div class="nft-grid">
-                    {filteredNFTs.value.map((nft) => (
-                      <div
-                        key={nft.id}
-                        class="nft"
-                        onClick$={() => (selectedNFT.value = nft)}
-                      >
-                        <div class="nft-image-wrapper">
-                          <img
-                            height="100"
-                            width="100"
-                            src={nft.image}
-                            alt={nft.name}
-                            loading="lazy"
-                            onError$={(e: any) => {
-                              e.target.src =
-                                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='%23e5e7eb'%3E%3Crect width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='48' fill='%239ca3af'%3ENFT%3C/text%3E%3C/svg%3E";
-                            }}
-                          />
-                          {nft.collection !== "Unknown Collection" && (
-                            <div class="nft-badge">{nft.collection}</div>
-                          )}
-                        </div>
-                        <div class="nft-info">
-                          <h3 class="nft-name">{nft.name}</h3>
-                          <div class="nft-collection">{nft.collection}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* NFT Modal */}
-          {selectedNFT.value && (
-            <div
-              class="modal-overlay"
-              onClick$={() => (selectedNFT.value = null)}
-            >
-              <div class="modal-content" onClick$={(e) => e.stopPropagation()}>
-                <div class="modal-header">
-                  <div class="modal-title">{selectedNFT.value.name}</div>
-                  <button
-                    class="modal-close"
-                    onClick$={() => (selectedNFT.value = null)}
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div class="modal-body">
-                  <div class="modal-grid">
-                    <div>
-                      <img
-                        height="100"
-                        width="100"
-                        src={selectedNFT.value.image}
-                        alt={selectedNFT.value.name}
-                        class="modal-image"
-                        onError$={(e: any) => {
-                          e.target.src =
-                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='%23e5e7eb'%3E%3Crect width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='48' fill='%239ca3af'%3ENFT%3C/text%3E%3C/svg%3E";
-                        }}
-                      />
-                    </div>
-
-                    <div class="modal-details">
-                      <div class="detail-section">
-                        <div class="detail-label">Collection</div>
-                        <div class="detail-value">
-                          {selectedNFT.value.collection}
-                        </div>
-                      </div>
-
-                      {selectedNFT.value.description && (
-                        <div class="detail-section">
-                          <div class="detail-label">Description</div>
-                          <div class="detail-value">
-                            {selectedNFT.value.description}
-                          </div>
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: "0.75rem",
-                          marginTop: "0.5rem",
-                        }}
-                      >
-                        <div class="detail-box">
-                          <div class="detail-label">Issuer</div>
-                          <div
-                            class="detail-value"
-                            style={{ fontSize: "0.6875rem" }}
-                          >
-                            {truncate(selectedNFT.value.issuer)}
-                          </div>
-                        </div>
-                        <div class="detail-box">
-                          <div class="detail-label">Taxon</div>
-                          <div class="detail-value">
-                            {selectedNFT.value.taxon}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="detail-box" style={{ marginTop: "0.25rem" }}>
-                        <div class="detail-label">NFToken ID</div>
+                    {paginated.value.map((nft) => {
+                      const price = getLowestSellPrice(
+                        nft.sellOffers || [],
+                        nativeCurrency.value,
+                      );
+                      const bestOffer = getHighestBuyPrice(
+                        nft.buyOffers || [],
+                        nativeCurrency.value,
+                      );
+                      return (
                         <div
-                          class="detail-value"
-                          style={{ fontSize: "0.625rem" }}
+                          key={nft.nftokenId}
+                          class="group rounded-2xl overflow-hidden bg-white border border-gray-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300 cursor-pointer hover:-translate-y-1"
+                          onClick$={() => (selectedNft.value = nft)}
                         >
-                          {selectedNFT.value.nftokenId}
-                        </div>
-                      </div>
-
-                      {selectedNFT.value.uri && (
-                        <div
-                          class="detail-section"
-                          style={{ marginTop: "0.5rem" }}
-                        >
-                          <div class="detail-label">Metadata URI</div>
-                          <div
-                            class="detail-value"
-                            style={{
-                              fontSize: "0.6875rem",
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            <a
-                              href={selectedNFT.value.uri}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                color: "#3b82f6",
-                                textDecoration: "underline",
+                          <div class="relative aspect-square overflow-hidden bg-gray-100">
+                            <img
+                              src={nft.image || PLACEHOLDER_IMG}
+                              alt={nft.name}
+                              width={400}
+                              height={400}
+                              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              loading="lazy"
+                              onError$={(e: any) => {
+                                e.target.src = PLACEHOLDER_IMG;
                               }}
-                            >
-                              {selectedNFT.value.uri.length > 60
-                                ? selectedNFT.value.uri.substring(0, 60) + "..."
-                                : selectedNFT.value.uri}
-                            </a>
+                            />
+                            {nft.sellOffers && nft.sellOffers.length > 0 && (
+                              <div class="absolute top-3 left-3 bg-green-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                                FOR SALE
+                              </div>
+                            )}
+                            {nft.buyOffers && nft.buyOffers.length > 0 && (
+                              <div class="absolute top-3 right-3 bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                                {nft.buyOffers.length} offer
+                                {nft.buyOffers.length > 1 ? "s" : ""}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      )}
-
-                      {selectedNFT.value.attributes &&
-                        selectedNFT.value.attributes.length > 0 && (
-                          <div
-                            class="detail-section"
-                            style={{ marginTop: "0.5rem" }}
-                          >
-                            <div class="detail-label">Attributes</div>
-                            <div class="attributes-grid">
-                              {selectedNFT.value.attributes.map((attr, i) => (
-                                <div key={i} class="attribute-card">
-                                  <div class="attribute-label">
-                                    {attr.trait_type}
+                          <div class="p-4">
+                            <h3 class="font-bold text-gray-900 truncate">
+                              {nft.name}
+                            </h3>
+                            {nft.collection && (
+                              <p class="text-xs text-blue-600 font-medium mt-0.5 truncate">
+                                {nft.collection}
+                              </p>
+                            )}
+                            <div class="flex items-center justify-between mt-3">
+                              <div>
+                                {price ? (
+                                  <div>
+                                    <div class="text-xs text-gray-500">
+                                      Price
+                                    </div>
+                                    <div class="text-sm font-bold text-green-700">
+                                      {price}
+                                    </div>
                                   </div>
-                                  <div class="attribute-value">
-                                    {attr.value}
+                                ) : (
+                                  <div class="text-xs text-gray-400">
+                                    Not listed
+                                  </div>
+                                )}
+                              </div>
+                              {bestOffer && (
+                                <div class="text-right">
+                                  <div class="text-xs text-gray-500">
+                                    Best Offer
+                                  </div>
+                                  <div class="text-sm font-bold text-blue-700">
+                                    {bestOffer}
                                   </div>
                                 </div>
-                              ))}
+                              )}
+                            </div>
+                            <div class="flex gap-2 mt-3">
+                              {nft.sellOffers &&
+                                nft.sellOffers.length > 0 &&
+                                wallet.connected.value &&
+                                nft.owner !== wallet.address.value && (
+                                  <button
+                                    class="flex-1 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition"
+                                    onClick$={(e) => {
+                                      e.stopPropagation();
+                                      const cheapest = nft.sellOffers.reduce(
+                                        (min, o) => {
+                                          const val =
+                                            typeof o.amount === "string"
+                                              ? Number(o.amount)
+                                              : Number(o.amount.value);
+                                          const minVal =
+                                            typeof min.amount === "string"
+                                              ? Number(min.amount)
+                                              : Number(min.amount.value);
+                                          return val < minVal ? o : min;
+                                        },
+                                        nft.sellOffers[0],
+                                      );
+                                      handleBuy(nft, cheapest);
+                                    }}
+                                  >
+                                    Buy
+                                  </button>
+                                )}
+                              {wallet.connected.value &&
+                                nft.owner !== wallet.address.value && (
+                                  <button
+                                    class="flex-1 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition"
+                                    onClick$={(e) => {
+                                      e.stopPropagation();
+                                      selectedNft.value = nft;
+                                      showOfferModal.value = true;
+                                    }}
+                                  >
+                                    Make Offer
+                                  </button>
+                                )}
                             </div>
                           </div>
-                        )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!loading.value &&
+                nfts.value.length === 0 &&
+                marketData.value === null && (
+                  <div class="text-center py-20 text-gray-400">
+                    <div class="text-6xl mb-4">🖼️</div>
+                    <p class="text-lg">
+                      Enter an r-address above to explore NFTs
+                    </p>
+                  </div>
+                )}
+
+              {!loading.value &&
+                nfts.value.length === 0 &&
+                marketData.value !== null && (
+                  <div class="text-center py-20 text-gray-400">
+                    <div class="text-6xl mb-4">📭</div>
+                    <p class="text-lg">This account has no NFTs</p>
+                  </div>
+                )}
+
+              {/* Pagination */}
+              {totalPages.value > 1 && (
+                <div class="flex justify-center items-center gap-4 mt-6 pb-4">
+                  <button
+                    class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={currentPage.value <= 1}
+                    onClick$={() => currentPage.value--}
+                  >
+                    ← Previous
+                  </button>
+                  <span class="text-sm font-semibold text-gray-700">
+                    {currentPage.value} / {totalPages.value}
+                  </span>
+                  <button
+                    class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled={currentPage.value >= totalPages.value}
+                    onClick$={() => currentPage.value++}
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* NFT Detail Modal */}
+            {selectedNft.value && (
+              <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div class="max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-200 shadow-2xl">
+                  <div class="relative">
+                    <button
+                      class="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 text-gray-700 hover:bg-white transition shadow"
+                      onClick$={() => {
+                        selectedNft.value = null;
+                        showOfferModal.value = false;
+                        offerAmount.value = "";
+                      }}
+                    >
+                      ✕
+                    </button>
+                    <img
+                      src={selectedNft.value.image || PLACEHOLDER_IMG}
+                      alt={selectedNft.value.name}
+                      width={600}
+                      height={600}
+                      class="w-full aspect-square object-cover"
+                      onError$={(e: any) => {
+                        e.target.src = PLACEHOLDER_IMG;
+                      }}
+                    />
+                  </div>
+                  <div class="p-6">
+                    <h2 class="text-2xl font-bold text-gray-900">
+                      {selectedNft.value.name}
+                    </h2>
+                    {selectedNft.value.collection && (
+                      <p class="text-sm text-blue-600 font-medium mt-1">
+                        {selectedNft.value.collection}
+                      </p>
+                    )}
+                    {selectedNft.value.description && (
+                      <p class="text-sm text-gray-600 mt-2">
+                        {selectedNft.value.description}
+                      </p>
+                    )}
+
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                      <div class="bg-gray-50 rounded-xl p-3">
+                        <div class="text-xs text-gray-500">Owner</div>
+                        <div class="text-sm font-mono font-medium truncate">
+                          {truncateAddress(selectedNft.value.owner)}
+                        </div>
+                      </div>
+                      <div class="bg-gray-50 rounded-xl p-3">
+                        <div class="text-xs text-gray-500">Issuer</div>
+                        <div class="text-sm font-mono font-medium truncate">
+                          {truncateAddress(selectedNft.value.issuer)}
+                        </div>
+                      </div>
+                      <div class="bg-gray-50 rounded-xl p-3">
+                        <div class="text-xs text-gray-500">Transfer Fee</div>
+                        <div class="text-sm font-medium">
+                          {selectedNft.value.transferFee / 1000}%
+                        </div>
+                      </div>
+                      <div class="bg-gray-50 rounded-xl p-3">
+                        <div class="text-xs text-gray-500">Taxon</div>
+                        <div class="text-sm font-medium">
+                          {selectedNft.value.taxon}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 bg-gray-50 rounded-xl p-3">
+                      <div class="text-xs text-gray-500 mb-1">NFToken ID</div>
+                      <div class="text-xs font-mono break-all text-gray-700">
+                        {selectedNft.value.nftokenId}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

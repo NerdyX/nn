@@ -128,7 +128,8 @@ const getTokenIcon = (currency: string, issuer: string) => {
         .replace(/\0/g, "");
       currency = decoded;
     } catch (e) {
-      // Keep original if decode fails
+      console.error("Failed to decode currency:", e); // Log the error
+      // Keeps original currency if decode fails
     }
   }
 

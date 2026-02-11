@@ -171,9 +171,6 @@ export default component$(() => {
         );
       }
 
-      const data = await res.json();
-      nfts.value = data.nfts || [];
-
       // Calculate stats
       const collections = new Set(
         nfts.value.map((n) => n.collection).filter(Boolean),
@@ -732,7 +729,6 @@ export default component$(() => {
                 currentPage.value = 1;
               }}
             >
-              <option value="">All Collections ({nfts.value.length})</option>
               {collections.value.map((c) => (
                 <option key={c} value={c}>
                   {c}

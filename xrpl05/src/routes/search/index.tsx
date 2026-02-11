@@ -7,7 +7,7 @@ import {
   $,
 } from "@builder.io/qwik";
 import { useWalletContext, truncateAddress } from "~/context/wallet-context";
-import { useNetworkContext, NETWORK_CONFIG } from "~/context/network-context";
+import { useNetworkContext } from "~/context/network-context";
 
 // ────────────────────────────────────────────────
 // Types
@@ -62,6 +62,8 @@ interface TokenLine {
   peer: string;
   limit: string;
   type: "token" | "trustline";
+  currency_code?: string;
+  icon?: string;
 }
 
 interface Transaction {
@@ -72,6 +74,9 @@ interface Transaction {
   Destination?: string;
   meta: { TransactionResult: string };
   date?: string;
+  validated?: boolean;
+  ledger_index?: number;
+  NFTokenID?: string;
 }
 
 interface NftItem {
@@ -113,74 +118,41 @@ const formatAmount = (amt: any, native: string) => {
   return `${amt.value} ${amt.currency}`;
 };
 
-const ipfsToHttp = (uri?: string) => {
-  if (!uri) return FALLBACK_IMG;
-
-  if (uri.match(/^[0-9A-Fa-f]+$/)) {
+// Get token icon from currency code
+const getTokenIcon = (currency: string, issuer: string) => {
+  // Check if it's a hex currency code
+  if (currency.length === 40) {
     try {
-      const bytes = new Uint8Array(
-        uri.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)),
-      );
-      const decoded = new TextDecoder().decode(bytes).trim();
-
-      if (decoded.startsWith("ipfs://"))
-        return `https://ipfs.io/ipfs/${decoded.slice(7)}`;
-      if (decoded.startsWith("https://") || decoded.startsWith("http://"))
-        return decoded;
-      if (decoded.startsWith("Qm") || decoded.startsWith("bafy"))
-        return `https://ipfs.io/ipfs/${decoded}`;
+      const decoded = Buffer.from(currency, "hex")
+        .toString("utf-8")
+        .replace(/\0/g, "");
+      currency = decoded;
     } catch (e) {
-      console.warn("Failed to decode hex URI:", uri, e);
+      // Keep original if decode fails
     }
   }
 
-  if (uri.startsWith("ipfs://")) return `https://ipfs.io/ipfs/${uri.slice(7)}`;
-  if (uri.startsWith("https://") || uri.startsWith("http://")) return uri;
-  if (uri.startsWith("Qm") || uri.startsWith("bafy"))
-    return `https://ipfs.io/ipfs/${uri}`;
-
-  return FALLBACK_IMG;
+  // Use a token icon service or return a default icon
+  return `https://xumm.app/avatar/${issuer}_${currency}.png`;
 };
 
-function getLowestSellPrice(
-  offers: SellOffer[],
-  nativeCurrency: string,
-): string | null {
-  if (!offers.length) return null;
-  let lowest = Infinity;
-  let lowestFormatted = "";
-  for (const o of offers) {
-    const val =
-      typeof o.amount === "string"
-        ? Number(o.amount) / 1_000_000
-        : Number(o.amount.value);
-    if (val < lowest) {
-      lowest = val;
-      lowestFormatted = formatAmount(o.amount, nativeCurrency);
-    }
-  }
-  return lowestFormatted;
-}
+const formatDate = (dateInput?: string | number) => {
+  if (!dateInput) return "—";
 
-function getHighestBuyPrice(
-  offers: BuyOffer[],
-  nativeCurrency: string,
-): string | null {
-  if (!offers.length) return null;
-  let highest = -Infinity;
-  let highestFormatted = "";
-  for (const o of offers) {
-    const val =
-      typeof o.amount === "string"
-        ? Number(o.amount) / 1_000_000
-        : Number(o.amount.value);
-    if (val > highest) {
-      highest = val;
-      highestFormatted = formatAmount(o.amount, nativeCurrency);
-    }
+  let date: Date;
+  if (typeof dateInput === "number") {
+    // XRPL epoch (946684800 seconds between Unix and Ripple epoch)
+    date = new Date((dateInput + 946684800) * 1000);
+  } else {
+    date = new Date(dateInput);
   }
-  return highestFormatted;
-}
+
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const year = date.getFullYear();
+
+  return `${month}/${day}/${year}`;
+};
 
 // ────────────────────────────────────────────────
 // Component
@@ -188,10 +160,6 @@ function getHighestBuyPrice(
 export default component$(() => {
   const wallet = useWalletContext();
   const { activeNetwork } = useNetworkContext();
-  const networkConfig = useComputed$(() => NETWORK_CONFIG[activeNetwork.value]);
-  const nativeCurrency = useComputed$(() =>
-    activeNetwork.value === "xrpl" ? "XRP" : "XAH",
-  );
 
   useStylesScoped$(`
     :root { --gap: 20px; }
@@ -299,18 +267,153 @@ export default component$(() => {
       padding: 1.5rem;
     }
 
+    .token-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      margin-bottom: 0.75rem;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+    }
+
+    .token-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: white;
+      border: 1px solid #e5e7eb;
+    }
+
+    .token-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .token-currency {
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #111827;
+    }
+
+    .token-issuer {
+      font-size: 0.75rem;
+      color: #6b7280;
+      font-family: monospace;
+    }
+
+    .token-balance {
+      text-align: right;
+      font-weight: 600;
+      color: #111827;
+      font-size: 0.875rem;
+    }
+
     .txs .body {
       max-height: 400px;
       overflow-y: auto;
+      padding: 0;
     }
 
-    .tx-item {
-      padding: 0.75rem 0;
+    .tx-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .tx-table thead {
+      background: #f9fafb;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .tx-table th {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .tx-table td {
+      padding: 0.75rem 1rem;
+      font-size: 0.8125rem;
       border-bottom: 1px solid #f3f4f6;
     }
 
-    .tx-item:nth-child(even) {
+    .tx-table tbody tr:hover {
       background: #f9fafb;
+    }
+
+    .tx-status {
+      color: #10b981;
+      font-weight: 600;
+    }
+
+    .tx-type {
+      font-weight: 500;
+      color: #111827;
+    }
+
+    .tx-hash {
+      color: #3b82f6;
+      text-decoration: none;
+      font-family: monospace;
+      font-size: 0.75rem;
+    }
+
+    .tx-hash:hover {
+      text-decoration: underline;
+    }
+
+    .tx-change-positive {
+      color: #10b981;
+      font-weight: 600;
+    }
+
+    .tx-change-negative {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .tx-nft-added {
+      color: #10b981;
+      font-size: 0.75rem;
+    }
+
+    /* NFT Tabs */
+    .nft-tabs {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #e5e7eb;
+      background: #fafbfc;
+    }
+
+    .nft-tab {
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      border: none;
+      background: transparent;
+      color: #6b7280;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nft-tab:hover {
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .nft-tab.active {
+      background: #3b82f6;
+      color: white;
     }
 
     /* NFT Card - Scrollable */
@@ -344,8 +447,41 @@ export default component$(() => {
 
     .nft-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .nft-item {
+      border-radius: 1rem;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      background: white;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .nft-item:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+      transform: translateY(-2px);
+    }
+
+    .nft-image-wrapper {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      background: #f3f4f6;
+    }
+
+    .nft-image-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+
+    .nft-item:hover .nft-image-wrapper img {
+      transform: scale(1.05);
     }
 
     .spinner {
@@ -376,13 +512,13 @@ export default component$(() => {
 
     @media (max-width: 768px) {
       .nft-grid {
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       }
     }
 
     @media (max-width: 640px) {
       .nft-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
       }
     }
   `);
@@ -407,7 +543,12 @@ export default component$(() => {
   const searchQuery = useSignal("");
   const selectedCollection = useSignal<string | null>(null);
   const currentPage = useSignal(1);
-  const pageSize = 12;
+  const pageSize = 24;
+
+  // NFT Tab state
+  const nftTab = useSignal<
+    "owned" | "sold" | "offers-created" | "offers-received"
+  >("owned");
 
   // Modal state
   const selectedNft = useSignal<NftItem | null>(null);
@@ -492,17 +633,44 @@ export default component$(() => {
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
       if (m.result?.account_data) account.value = m.result.account_data;
-      if (m.result?.lines) lines.value = m.result.lines;
-      if (m.result?.transactions)
-        txs.value = m.result.transactions.map((t: any) => t.tx || t);
+      if (m.result?.lines) {
+        lines.value = m.result.lines.map((line: any) => ({
+          ...line,
+          icon: getTokenIcon(line.currency, line.account),
+        }));
+      }
+      if (m.result?.transactions) {
+        txs.value = m.result.transactions.map((t: any) => ({
+          ...(t.tx || t),
+          validated: t.validated,
+          ledger_index: t.ledger_index,
+        }));
+      }
     };
 
     cleanup(() => ws.close());
   });
 
-  // Filtered NFTs
+  // Filtered NFTs based on active tab
   const filtered = useComputed$(() => {
-    return nfts.value.filter((nft) => {
+    let tabFiltered = nfts.value;
+
+    // Filter by tab
+    if (nftTab.value === "sold") {
+      // This would need to come from transaction history
+      tabFiltered = [];
+    } else if (nftTab.value === "offers-created") {
+      tabFiltered = nfts.value.filter(
+        (nft) => nft.sellOffers && nft.sellOffers.length > 0,
+      );
+    } else if (nftTab.value === "offers-received") {
+      tabFiltered = nfts.value.filter(
+        (nft) => nft.buyOffers && nft.buyOffers.length > 0,
+      );
+    }
+
+    // Apply search and collection filters
+    return tabFiltered.filter((nft) => {
       const q = searchQuery.value.toLowerCase();
       const matchesSearch =
         !q ||
@@ -538,10 +706,22 @@ export default component$(() => {
     Math.max(1, Math.ceil(filtered.value.length / pageSize)),
   );
 
-  // Buy handler (placeholder)
-  const handleBuy = $((nft: NftItem, offer: SellOffer) => {
-    console.log("Buy NFT:", nft.nftokenId, "Offer:", offer.index);
-    // Implement buy logic here
+  // NFT count by tab
+  const nftCounts = useComputed$(() => {
+    const owned = nfts.value.length;
+    const offersCreated = nfts.value.filter(
+      (nft) => nft.sellOffers && nft.sellOffers.length > 0,
+    ).length;
+    const offersReceived = nfts.value.filter(
+      (nft) => nft.buyOffers && nft.buyOffers.length > 0,
+    ).length;
+
+    return {
+      owned,
+      sold: 0, // Would need transaction history
+      offersCreated,
+      offersReceived,
+    };
   });
 
   return (
@@ -669,19 +849,40 @@ export default component$(() => {
 
               {/* Tokens & Trustlines */}
               <div class="card square-card">
-                <div class="header">Tokens & Trustlines</div>
+                <div class="header">
+                  {lines.value.length} TOKENS{" "}
+                  {wallet.connected.value && (
+                    <a
+                      href="#"
+                      style={{ color: "#3b82f6", fontSize: "0.75rem" }}
+                    >
+                      [SIGN IN]
+                    </a>
+                  )}
+                </div>
                 <div class="body">
                   {lines.value.length === 0 ? (
                     <div>No tokens or trustlines</div>
                   ) : (
                     lines.value.map((l, i) => (
-                      <div key={i} style={{ marginBottom: "1rem" }}>
-                        <strong>{l.currency}</strong>: {l.balance} (limit:{" "}
-                        {l.limit})
-                        <br />
-                        <small>
-                          {l.type} with {truncate(l.peer)}
-                        </small>
+                      <div key={i} class="token-item">
+                        <img
+                          src={l.icon || FALLBACK_IMG}
+                          alt={l.currency}
+                          class="token-icon"
+                          onError$={(e: any) => {
+                            e.target.src = FALLBACK_IMG;
+                          }}
+                        />
+                        <div class="token-info">
+                          <div class="token-currency">{l.currency}</div>
+                          <div class="token-issuer">{truncate(l.peer)}</div>
+                        </div>
+                        <div class="token-balance">
+                          {Number(l.balance).toLocaleString(undefined, {
+                            maximumFractionDigits: 2,
+                          })}
+                        </div>
                       </div>
                     ))
                   )}
@@ -691,55 +892,131 @@ export default component$(() => {
 
             {/* Transaction History - full width */}
             <div class="card txs" style={{ gridColumn: "1 / -1" }}>
-              <div class="header">Transaction History</div>
+              <div class="header">
+                LAST {txs.value.length} TRANSACTIONS{" "}
+                <a href="#" style={{ color: "#3b82f6", fontSize: "0.75rem" }}>
+                  [VIEW ALL]
+                </a>
+              </div>
               <div class="body">
                 {txs.value.length === 0 ? (
-                  <div>No recent transactions</div>
+                  <div
+                    style={{
+                      padding: "1.5rem",
+                      textAlign: "center",
+                      color: "#6b7280",
+                    }}
+                  >
+                    No recent transactions
+                  </div>
                 ) : (
-                  txs.value.map((t, i) => (
-                    <div key={i} class="tx-item">
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <span>{t.TransactionType}</span>
-                        <span
-                          style={{
-                            color:
-                              t.meta?.TransactionResult === "tesSUCCESS"
-                                ? "green"
-                                : "red",
-                          }}
-                        >
-                          {t.meta?.TransactionResult || "unknown"}
-                        </span>
-                      </div>
-                      <div>
-                        {new Date(t.date || Date.now()).toLocaleString()}
-                      </div>
-                      <div>
-                        {truncate(t.Account)} → {truncate(t.Destination || "")}
-                      </div>
-                      <div>
-                        {t.Amount
-                          ? formatAmount(
-                              t.Amount,
-                              network.value === "xrpl" ? "XRP" : "XAH",
-                            )
-                          : "—"}
-                      </div>
-                      <div>Hash: {truncate(t.hash)}</div>
-                    </div>
-                  ))
+                  <table class="tx-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Validated</th>
+                        <th>Type</th>
+                        <th>Hash</th>
+                        <th>Changes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {txs.value.map((t, i) => (
+                        <tr key={i}>
+                          <td>
+                            <span class="tx-status">✓</span>
+                          </td>
+                          <td>{formatDate(t.date)}</td>
+                          <td class="tx-type">{t.TransactionType}</td>
+                          <td>
+                            <a
+                              href={`https://${network.value === "xrpl" ? "livenet" : "xahau"}.xrpl.org/transactions/${t.hash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="tx-hash"
+                            >
+                              {truncate(t.hash)}
+                            </a>
+                          </td>
+                          <td>
+                            {t.TransactionType === "NFTokenAcceptOffer" &&
+                              t.NFTokenID && (
+                                <div class="tx-nft-added">
+                                  NFT added: {truncate(t.NFTokenID)}
+                                </div>
+                              )}
+                            {t.Amount && (
+                              <span
+                                class={
+                                  t.Account === debounced.value
+                                    ? "tx-change-negative"
+                                    : "tx-change-positive"
+                                }
+                              >
+                                {t.Account === debounced.value ? "-" : "+"}
+                                {formatAmount(
+                                  t.Amount,
+                                  network.value === "xrpl" ? "XRP" : "XAH",
+                                )}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             </div>
 
-            {/* NFTs Card - full width with dropdown filtering and pagination */}
+            {/* NFTs Card - full width with tabs, filtering and pagination */}
             <div class="card nft-card-wrapper">
-              <div class="header">NFTs ({nfts.value.length})</div>
+              <div class="header">
+                {nftCounts.value.owned} OWNED NFTS{" "}
+                <a href="#" style={{ color: "#3b82f6", fontSize: "0.75rem" }}>
+                  [VIEW ALL]
+                </a>
+              </div>
+
+              {/* NFT Tabs */}
+              <div class="nft-tabs">
+                <button
+                  class={`nft-tab ${nftTab.value === "owned" ? "active" : ""}`}
+                  onClick$={() => {
+                    nftTab.value = "owned";
+                    currentPage.value = 1;
+                  }}
+                >
+                  Owned ({nftCounts.value.owned})
+                </button>
+                <button
+                  class={`nft-tab ${nftTab.value === "sold" ? "active" : ""}`}
+                  onClick$={() => {
+                    nftTab.value = "sold";
+                    currentPage.value = 1;
+                  }}
+                >
+                  Sold ({nftCounts.value.sold})
+                </button>
+                <button
+                  class={`nft-tab ${nftTab.value === "offers-created" ? "active" : ""}`}
+                  onClick$={() => {
+                    nftTab.value = "offers-created";
+                    currentPage.value = 1;
+                  }}
+                >
+                  Offers Created ({nftCounts.value.offersCreated})
+                </button>
+                <button
+                  class={`nft-tab ${nftTab.value === "offers-received" ? "active" : ""}`}
+                  onClick$={() => {
+                    nftTab.value = "offers-received";
+                    currentPage.value = 1;
+                  }}
+                >
+                  Offers Received ({nftCounts.value.offersReceived})
+                </button>
+              </div>
 
               {/* Filters */}
               {nfts.value.length > 0 && (
@@ -798,151 +1075,54 @@ export default component$(() => {
               {!loading.value && paginated.value.length > 0 && (
                 <div class="nft-scroll-body">
                   <div class="nft-grid">
-                    {paginated.value.map((nft) => {
-                      const price = getLowestSellPrice(
-                        nft.sellOffers || [],
-                        nativeCurrency.value,
-                      );
-                      const bestOffer = getHighestBuyPrice(
-                        nft.buyOffers || [],
-                        nativeCurrency.value,
-                      );
-                      return (
-                        <div
-                          key={nft.nftokenId}
-                          class="group rounded-2xl overflow-hidden bg-white border border-gray-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300 cursor-pointer hover:-translate-y-1"
-                          onClick$={() => (selectedNft.value = nft)}
-                        >
-                          <div class="relative aspect-square overflow-hidden bg-gray-100">
-                            <img
-                              src={nft.image || PLACEHOLDER_IMG}
-                              alt={nft.name}
-                              width={400}
-                              height={400}
-                              class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                              loading="lazy"
-                              onError$={(e: any) => {
-                                e.target.src = PLACEHOLDER_IMG;
-                              }}
-                            />
-                            {nft.sellOffers && nft.sellOffers.length > 0 && (
-                              <div class="absolute top-3 left-3 bg-green-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
-                                FOR SALE
-                              </div>
-                            )}
-                            {nft.buyOffers && nft.buyOffers.length > 0 && (
-                              <div class="absolute top-3 right-3 bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
-                                {nft.buyOffers.length} offer
-                                {nft.buyOffers.length > 1 ? "s" : ""}
-                              </div>
-                            )}
-                          </div>
-                          <div class="p-4">
-                            <h3 class="font-bold text-gray-900 truncate">
-                              {nft.name}
-                            </h3>
-                            {nft.collection && (
-                              <p class="text-xs text-blue-600 font-medium mt-0.5 truncate">
-                                {nft.collection}
-                              </p>
-                            )}
-                            <div class="flex items-center justify-between mt-3">
-                              <div>
-                                {price ? (
-                                  <div>
-                                    <div class="text-xs text-gray-500">
-                                      Price
-                                    </div>
-                                    <div class="text-sm font-bold text-green-700">
-                                      {price}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div class="text-xs text-gray-400">
-                                    Not listed
-                                  </div>
-                                )}
-                              </div>
-                              {bestOffer && (
-                                <div class="text-right">
-                                  <div class="text-xs text-gray-500">
-                                    Best Offer
-                                  </div>
-                                  <div class="text-sm font-bold text-blue-700">
-                                    {bestOffer}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            <div class="flex gap-2 mt-3">
-                              {nft.sellOffers &&
-                                nft.sellOffers.length > 0 &&
-                                wallet.connected.value &&
-                                nft.owner !== wallet.address.value && (
-                                  <button
-                                    class="flex-1 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition"
-                                    onClick$={(e) => {
-                                      e.stopPropagation();
-                                      const cheapest = nft.sellOffers.reduce(
-                                        (min, o) => {
-                                          const val =
-                                            typeof o.amount === "string"
-                                              ? Number(o.amount)
-                                              : Number(o.amount.value);
-                                          const minVal =
-                                            typeof min.amount === "string"
-                                              ? Number(min.amount)
-                                              : Number(min.amount.value);
-                                          return val < minVal ? o : min;
-                                        },
-                                        nft.sellOffers[0],
-                                      );
-                                      handleBuy(nft, cheapest);
-                                    }}
-                                  >
-                                    Buy
-                                  </button>
-                                )}
-                              {wallet.connected.value &&
-                                nft.owner !== wallet.address.value && (
-                                  <button
-                                    class="flex-1 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition"
-                                    onClick$={(e) => {
-                                      e.stopPropagation();
-                                      selectedNft.value = nft;
-                                      showOfferModal.value = true;
-                                    }}
-                                  >
-                                    Make Offer
-                                  </button>
-                                )}
-                            </div>
-                          </div>
+                    {paginated.value.map((nft) => (
+                      <div
+                        key={nft.nftokenId}
+                        class="nft-item"
+                        onClick$={() => (selectedNft.value = nft)}
+                      >
+                        <div class="nft-image-wrapper">
+                          <img
+                            src={nft.image || PLACEHOLDER_IMG}
+                            alt={nft.name}
+                            width={200}
+                            height={200}
+                            loading="eager"
+                            decoding="async"
+                            onError$={(e: any) => {
+                              e.target.src = PLACEHOLDER_IMG;
+                            }}
+                          />
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
               {/* Empty state */}
               {!loading.value &&
-                nfts.value.length === 0 &&
-                marketData.value === null && (
+                filtered.value.length === 0 &&
+                nfts.value.length === 0 && (
                   <div class="text-center py-20 text-gray-400">
                     <div class="text-6xl mb-4">🖼️</div>
                     <p class="text-lg">
-                      Enter an r-address above to explore NFTs
+                      {nftTab.value === "owned" && "This account has no NFTs"}
+                      {nftTab.value === "sold" && "No sold NFTs found"}
+                      {nftTab.value === "offers-created" &&
+                        "No sell offers created"}
+                      {nftTab.value === "offers-received" &&
+                        "No buy offers received"}
                     </p>
                   </div>
                 )}
 
               {!loading.value &&
-                nfts.value.length === 0 &&
-                marketData.value !== null && (
+                filtered.value.length === 0 &&
+                nfts.value.length > 0 && (
                   <div class="text-center py-20 text-gray-400">
-                    <div class="text-6xl mb-4">📭</div>
-                    <p class="text-lg">This account has no NFTs</p>
+                    <div class="text-6xl mb-4">🔍</div>
+                    <p class="text-lg">No NFTs match your filters</p>
                   </div>
                 )}
 

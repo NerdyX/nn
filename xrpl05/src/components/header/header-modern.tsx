@@ -214,51 +214,107 @@ export const HeaderModern = component$<HeaderProps>(() => {
       "xaman_jwt=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
   });
 
+  const isDashboard = location.url.pathname.startsWith("/dashboard");
+
   return (
     <>
-      {/* Glassmorphic Pill Header */}
-      <header class="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-        <div class="flex h-14 sm:h-16 max-w-6xl w-full items-center justify-between rounded-full bg-white/70 dark:bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg px-4 sm:px-6 md:px-8 transition-all duration-300 hover:bg-white/80 hover:shadow-xl">
-          {/* Logo */}
-          <div class="shrink-0">
-            <button
-              class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition"
-              onClick$={() => navigate("/")}
-            >
-              {"{XRPL}"}OS
-            </button>
-          </div>
+      {/* ─── Glassmorphic Pill Header ─── */}
+      <header
+        class="fixed inset-x-0 top-0 z-50 flex justify-center px-3 sm:px-4 pt-3"
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          class="flex h-12 sm:h-14 max-w-5xl w-full items-center justify-between px-4 sm:px-6 transition-all duration-300"
+          style={{
+            pointerEvents: "auto",
+            borderRadius: "9999px",
+            background: "rgba(255,255,255,0.65)",
+            backdropFilter: "blur(24px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+            border: "1px solid rgba(255,255,255,0.35)",
+            boxShadow:
+              "0 4px 24px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6)",
+          }}
+        >
+          {/* ── Logo ── */}
+          <button
+            class="shrink-0 text-lg sm:text-xl font-bold cursor-pointer hover:opacity-80 transition-opacity"
+            style={{
+              background: "linear-gradient(135deg, #2563eb, #f59e0b)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+            onClick$={() => navigate("/")}
+          >
+            {"{XRPL}"}OS
+          </button>
 
-          {/* Desktop Navigation */}
-          <nav class="hidden md:flex items-center gap-2">
-            {navItems.map((item) => (
+          {/* ── Desktop Nav ── */}
+          <nav class="hidden md:flex items-center gap-1">
+            {navItems.map((item) => {
+              const isActive = location.url.pathname.startsWith(item.href);
+              return (
+                <button
+                  key={item.href}
+                  class="px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer"
+                  style={{
+                    background: isActive
+                      ? "rgba(37,99,235,0.1)"
+                      : "transparent",
+                    color: isActive ? "#2563eb" : "#374151",
+                  }}
+                  onClick$={() => navigate(item.href)}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+            {isConnected && (
               <button
-                key={item.href}
-                class={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                  location.url.pathname.startsWith(item.href)
-                    ? "bg-blue-500/10 text-blue-600"
-                    : "text-gray-700 hover:bg-gray-100/50"
-                }`}
-                onClick$={() => navigate(item.href)}
+                class="px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer"
+                style={{
+                  background: isDashboard
+                    ? "rgba(37,99,235,0.1)"
+                    : "transparent",
+                  color: isDashboard ? "#2563eb" : "#374151",
+                }}
+                onClick$={() => navigate("/dashboard")}
               >
-                {item.label}
+                Dashboard
               </button>
-            ))}
+            )}
           </nav>
 
-          {/* Right Side Actions */}
-          <div class="flex items-center gap-2 sm:gap-3">
+          {/* ── Right Actions ── */}
+          <div class="flex items-center gap-2">
+            {/* Desktop wallet */}
             <div class="hidden sm:flex items-center gap-2">
               {isConnected ? (
                 <div class="flex items-center gap-2">
-                  <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/50 backdrop-blur-sm">
-                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span class="text-xs font-medium text-green-700">
+                  {/* Connected badge */}
+                  <div
+                    class="flex items-center gap-2 px-3 py-1 rounded-full"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(5,150,105,0.08))",
+                      border: "1px solid rgba(16,185,129,0.2)",
+                    }}
+                  >
+                    <div
+                      class="w-1.5 h-1.5 rounded-full animate-pulse"
+                      style={{ background: "#10b981" }}
+                    />
+                    <span
+                      class="text-xs font-medium"
+                      style={{ color: "#059669" }}
+                    >
                       {truncateAddress(walletCtx.address.value, 4)}
                     </span>
                   </div>
                   <button
-                    class="text-xs font-medium px-3 py-1.5 rounded-full text-red-600 hover:bg-red-50 transition"
+                    class="text-xs font-medium px-3 py-1 rounded-full transition-colors cursor-pointer"
+                    style={{ color: "#dc2626" }}
                     onClick$={handleDisconnect}
                   >
                     Disconnect
@@ -266,7 +322,11 @@ export const HeaderModern = component$<HeaderProps>(() => {
                 </div>
               ) : (
                 <button
-                  class="px-4 py-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-medium hover:shadow-lg transition-all duration-300"
+                  class="px-4 py-1.5 rounded-full text-white text-sm font-medium transition-all duration-300 cursor-pointer"
+                  style={{
+                    background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+                    boxShadow: "0 2px 8px rgba(37,99,235,0.3)",
+                  }}
                   onClick$={() => (showWalletModal.value = true)}
                 >
                   Connect Wallet
@@ -274,17 +334,19 @@ export const HeaderModern = component$<HeaderProps>(() => {
               )}
             </div>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile menu toggle */}
             <button
-              class="md:hidden p-2 rounded-full hover:bg-gray-100/50 transition"
+              class="md:hidden p-2 rounded-full transition cursor-pointer"
+              style={{ background: "rgba(0,0,0,0.04)" }}
               onClick$={() => (mobileMenuOpen.value = !mobileMenuOpen.value)}
               aria-label="Toggle menu"
             >
               <svg
-                class="w-5 h-5 sm:w-6 sm:h-6"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                style={{ color: "#374151" }}
               >
                 {mobileMenuOpen.value ? (
                   <path
@@ -307,14 +369,38 @@ export const HeaderModern = component$<HeaderProps>(() => {
         </div>
       </header>
 
-      {/* Mobile Menu */}
+      {/* ─── Mobile Menu ─── */}
       {mobileMenuOpen.value && (
-        <div class="fixed inset-x-4 top-20 z-40 rounded-2xl bg-white/90 backdrop-blur-xl border border-white/20 shadow-xl p-4 md:hidden animate-slide-down">
-          <nav class="space-y-2">
+        <div
+          class="fixed inset-x-3 z-40 md:hidden"
+          style={{
+            top: "64px",
+            borderRadius: "20px",
+            background: "rgba(255,255,255,0.92)",
+            backdropFilter: "blur(24px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+            border: "1px solid rgba(255,255,255,0.35)",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+            animation: "slideDown 0.25s ease-out",
+          }}
+        >
+          <style>{`
+            @keyframes slideDown {
+              from { opacity: 0; transform: translateY(-8px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
+          <nav class="p-3 space-y-1">
             {navItems.map((item) => (
               <button
                 key={item.href}
-                class="block w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100/70 rounded-xl transition"
+                class="block w-full text-left px-4 py-3 text-sm font-medium rounded-xl transition cursor-pointer"
+                style={{
+                  color: "#374151",
+                  background: location.url.pathname.startsWith(item.href)
+                    ? "rgba(37,99,235,0.08)"
+                    : "transparent",
+                }}
                 onClick$={() => {
                   navigate(item.href);
                   mobileMenuOpen.value = false;
@@ -323,9 +409,33 @@ export const HeaderModern = component$<HeaderProps>(() => {
                 {item.label}
               </button>
             ))}
-            {!isConnected && (
+            {isConnected && (
               <button
-                class="w-full mt-4 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium"
+                class="block w-full text-left px-4 py-3 text-sm font-medium rounded-xl transition cursor-pointer"
+                style={{
+                  color: "#374151",
+                  background: isDashboard
+                    ? "rgba(37,99,235,0.08)"
+                    : "transparent",
+                }}
+                onClick$={() => {
+                  navigate("/dashboard");
+                  mobileMenuOpen.value = false;
+                }}
+              >
+                Dashboard
+              </button>
+            )}
+            <div
+              class="mx-3 my-2"
+              style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}
+            />
+            {!isConnected ? (
+              <button
+                class="w-full px-4 py-3 rounded-xl text-white font-medium text-sm cursor-pointer"
+                style={{
+                  background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+                }}
                 onClick$={() => {
                   showWalletModal.value = true;
                   mobileMenuOpen.value = false;
@@ -333,17 +443,32 @@ export const HeaderModern = component$<HeaderProps>(() => {
               >
                 Connect Wallet
               </button>
-            )}
-            {isConnected && (
-              <div class="space-y-2 pt-2 border-t border-gray-200">
-                <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-50">
-                  <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                  <span class="text-xs font-medium text-green-700">
-                    {truncateAddress(walletCtx.address.value, 4)}
+            ) : (
+              <>
+                <div
+                  class="flex items-center gap-2 px-4 py-2 rounded-xl"
+                  style={{
+                    background: "rgba(16,185,129,0.06)",
+                    border: "1px solid rgba(16,185,129,0.15)",
+                  }}
+                >
+                  <div
+                    class="w-2 h-2 rounded-full animate-pulse"
+                    style={{ background: "#10b981" }}
+                  />
+                  <span
+                    class="text-xs font-medium"
+                    style={{ color: "#059669" }}
+                  >
+                    {truncateAddress(walletCtx.address.value, 6)}
                   </span>
                 </div>
                 <button
-                  class="w-full px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition font-medium"
+                  class="w-full px-4 py-3 rounded-xl font-medium text-sm transition cursor-pointer"
+                  style={{
+                    background: "rgba(239,68,68,0.06)",
+                    color: "#dc2626",
+                  }}
                   onClick$={() => {
                     handleDisconnect();
                     mobileMenuOpen.value = false;
@@ -351,145 +476,428 @@ export const HeaderModern = component$<HeaderProps>(() => {
                 >
                   Disconnect
                 </button>
-              </div>
+              </>
             )}
           </nav>
         </div>
       )}
 
-      {/* Wallet Modal */}
+      {/* ─── Wallet Connect Modal ─── */}
       {showWalletModal.value && (
         <>
+          {/* Backdrop */}
           <div
-            class="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm"
-            onClick$={() => (showWalletModal.value = false)}
-          ></div>
-          <div class="fixed inset-0 z-[201] flex items-center justify-center p-4 overflow-y-auto pointer-events-none">
+            class="fixed inset-0 z-[9998]"
+            style={{
+              background: "rgba(0,0,0,0.4)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+            }}
+            onClick$={() => {
+              showWalletModal.value = false;
+              walletError.value = "";
+              walletLoading.value = null;
+            }}
+          />
+          {/* Modal — centered with max-height constraint */}
+          <div
+            class="fixed z-[9999] overflow-y-auto"
+            style={{
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "min(420px, calc(100vw - 32px))",
+              maxHeight: "min(85vh, 560px)",
+              background: "rgba(255,255,255,0.97)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              borderRadius: "24px",
+              border: "1px solid rgba(255,255,255,0.4)",
+              boxShadow:
+                "0 25px 60px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.08)",
+              padding: "28px",
+              animation: "modalIn 0.25s ease-out",
+            }}
+            onClick$={(e) => e.stopPropagation()}
+          >
+            <style>{`
+              @keyframes modalIn {
+                from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+                to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+              }
+            `}</style>
+
+            {/* Header */}
             <div
-              class="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full m-auto pointer-events-auto"
-              onClick$={(e) => e.stopPropagation()}
+              class="flex items-center justify-between"
+              style={{ marginBottom: "20px" }}
             >
-              <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xl font-bold text-gray-900">Connect Wallet</h2>
-                <button
-                  class="text-gray-400 hover:text-gray-600 transition"
-                  onClick$={() => (showWalletModal.value = false)}
-                >
-                  ✕
-                </button>
-              </div>
-
-              {walletError.value && (
-                <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  {walletError.value}
-                </div>
-              )}
-
-              <div class="space-y-3">
-                {/* Xaman */}
-                <button
-                  onClick$={connectXaman}
-                  disabled={walletLoading.value !== null}
-                  class="w-full flex items-center gap-4 px-4 py-3 rounded-xl border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
-                >
-                  <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-lg group-hover:bg-blue-200 transition">
-                    🔐
-                  </div>
-                  <div class="text-left flex-1">
-                    <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-700 transition">
-                      Xaman (Xumm)
-                    </div>
-                    <div class="text-xs text-gray-500">QR code signing</div>
-                  </div>
-                  {walletLoading.value === "xaman" && (
-                    <div class="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  )}
-                </button>
-
-                {/* Crossmark */}
-                <button
-                  onClick$={connectCrossmark}
-                  disabled={walletLoading.value !== null}
-                  class="w-full flex items-center gap-4 px-4 py-3 rounded-xl border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
-                >
-                  <div class="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center text-lg group-hover:bg-purple-200 transition">
-                    ✓
-                  </div>
-                  <div class="text-left flex-1">
-                    <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-700 transition">
-                      Crossmark
-                    </div>
-                    <div class="text-xs text-gray-500">Browser extension</div>
-                  </div>
-                  {walletLoading.value === "crossmark" && (
-                    <div class="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  )}
-                </button>
-
-                {/* GemWallet */}
-                <button
-                  onClick$={connectGem}
-                  disabled={walletLoading.value !== null}
-                  class="w-full flex items-center gap-4 px-4 py-3 rounded-xl border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
-                >
-                  <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center text-lg group-hover:bg-amber-200 transition">
-                    💎
-                  </div>
-                  <div class="text-left flex-1">
-                    <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-700 transition">
-                      GemWallet
-                    </div>
-                    <div class="text-xs text-gray-500">Browser extension</div>
-                  </div>
-                  {walletLoading.value === "gem" && (
-                    <div class="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  )}
-                </button>
-              </div>
-
-              <p class="text-xs text-gray-500 text-center mt-6">
-                Your private keys are never shared. All transactions are signed
-                on your device.
-              </p>
+              <h2
+                style={{
+                  fontSize: "20px",
+                  fontWeight: "700",
+                  color: "#111827",
+                  margin: "0",
+                }}
+              >
+                Connect Wallet
+              </h2>
+              <button
+                class="cursor-pointer transition-colors"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "rgba(0,0,0,0.05)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#6b7280",
+                  fontSize: "16px",
+                }}
+                onClick$={() => {
+                  showWalletModal.value = false;
+                  walletError.value = "";
+                  walletLoading.value = null;
+                }}
+              >
+                ✕
+              </button>
             </div>
+
+            {/* Error */}
+            {walletError.value && (
+              <div
+                style={{
+                  marginBottom: "16px",
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  background: "rgba(239,68,68,0.06)",
+                  border: "1px solid rgba(239,68,68,0.15)",
+                  fontSize: "13px",
+                  color: "#dc2626",
+                  lineHeight: "1.5",
+                }}
+              >
+                {walletError.value}
+              </div>
+            )}
+
+            {/* Wallet Options */}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            >
+              {/* Xaman */}
+              <button
+                onClick$={connectXaman}
+                disabled={walletLoading.value !== null}
+                class="cursor-pointer"
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "14px 16px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  background: "rgba(255,255,255,0.8)",
+                  transition: "all 0.2s",
+                  opacity:
+                    walletLoading.value !== null &&
+                    walletLoading.value !== "xaman"
+                      ? "0.5"
+                      : "1",
+                }}
+              >
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, #dbeafe, #bfdbfe)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                    flexShrink: "0",
+                  }}
+                >
+                  🔐
+                </div>
+                <div style={{ textAlign: "left", flex: "1" }}>
+                  <div
+                    style={{
+                      fontWeight: "600",
+                      fontSize: "14px",
+                      color: "#111827",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    Xaman (Xumm)
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                    QR code signing
+                  </div>
+                </div>
+                {walletLoading.value === "xaman" && (
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      border: "2px solid #3b82f6",
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "spin 0.8s linear infinite",
+                    }}
+                  />
+                )}
+              </button>
+
+              {/* Crossmark */}
+              <button
+                onClick$={connectCrossmark}
+                disabled={walletLoading.value !== null}
+                class="cursor-pointer"
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "14px 16px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  background: "rgba(255,255,255,0.8)",
+                  transition: "all 0.2s",
+                  opacity:
+                    walletLoading.value !== null &&
+                    walletLoading.value !== "crossmark"
+                      ? "0.5"
+                      : "1",
+                }}
+              >
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, #ede9fe, #ddd6fe)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                    flexShrink: "0",
+                  }}
+                >
+                  ✓
+                </div>
+                <div style={{ textAlign: "left", flex: "1" }}>
+                  <div
+                    style={{
+                      fontWeight: "600",
+                      fontSize: "14px",
+                      color: "#111827",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    Crossmark
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                    Browser extension
+                  </div>
+                </div>
+                {walletLoading.value === "crossmark" && (
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      border: "2px solid #7c3aed",
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "spin 0.8s linear infinite",
+                    }}
+                  />
+                )}
+              </button>
+
+              {/* GemWallet */}
+              <button
+                onClick$={connectGem}
+                disabled={walletLoading.value !== null}
+                class="cursor-pointer"
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "14px 16px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  background: "rgba(255,255,255,0.8)",
+                  transition: "all 0.2s",
+                  opacity:
+                    walletLoading.value !== null &&
+                    walletLoading.value !== "gem"
+                      ? "0.5"
+                      : "1",
+                }}
+              >
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, #fef3c7, #fde68a)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                    flexShrink: "0",
+                  }}
+                >
+                  💎
+                </div>
+                <div style={{ textAlign: "left", flex: "1" }}>
+                  <div
+                    style={{
+                      fontWeight: "600",
+                      fontSize: "14px",
+                      color: "#111827",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    GemWallet
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                    Browser extension
+                  </div>
+                </div>
+                {walletLoading.value === "gem" && (
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      border: "2px solid #f59e0b",
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "spin 0.8s linear infinite",
+                    }}
+                  />
+                )}
+              </button>
+            </div>
+
+            <style>{`
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+            `}</style>
+
+            {/* Footer */}
+            <p
+              style={{
+                textAlign: "center",
+                marginTop: "20px",
+                fontSize: "12px",
+                color: "#9ca3af",
+                lineHeight: "1.5",
+              }}
+            >
+              Your private keys are never shared.
+              <br />
+              All transactions are signed on your device.
+            </p>
           </div>
         </>
       )}
 
-      {/* QR Modal */}
+      {/* ─── QR Modal ─── */}
       {showQrModal.value && qrImage.value && (
         <>
           <div
-            class="fixed inset-0 z-[210] bg-black/50 backdrop-blur-sm"
+            class="fixed inset-0 z-[10000]"
+            style={{
+              background: "rgba(0,0,0,0.5)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+            }}
             onClick$={() => (showQrModal.value = false)}
-          ></div>
-          <div class="fixed inset-0 z-[211] flex items-center justify-center p-4 overflow-y-auto pointer-events-none">
-            <div
-              class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center m-auto pointer-events-auto"
-              onClick$={(e) => e.stopPropagation()}
+          />
+          <div
+            class="fixed z-[10001]"
+            style={{
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "min(380px, calc(100vw - 32px))",
+              maxHeight: "85vh",
+              background: "rgba(255,255,255,0.97)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              borderRadius: "24px",
+              border: "1px solid rgba(255,255,255,0.4)",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.15)",
+              padding: "28px",
+              textAlign: "center",
+              animation: "modalIn 0.25s ease-out",
+            }}
+            onClick$={(e) => e.stopPropagation()}
+          >
+            <h3
+              style={{
+                fontSize: "18px",
+                fontWeight: "700",
+                color: "#111827",
+                marginBottom: "16px",
+              }}
             >
-              <h3 class="text-lg font-bold text-gray-900 mb-4">
-                Scan with Xaman
-              </h3>
-              <div class="bg-white rounded-xl p-4 border border-gray-200 mb-4 inline-block">
-                <img
-                  src={qrImage.value}
-                  alt="Xaman QR Code"
-                  width={256}
-                  height={256}
-                  class="w-64 h-64"
-                />
-              </div>
-              <p class="text-sm text-gray-600 mb-4">
-                Open Xaman and scan this QR code to sign in
-              </p>
-              <button
-                class="w-full px-4 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
-                onClick$={() => (showQrModal.value = false)}
-              >
-                Cancel
-              </button>
+              Scan with Xaman
+            </h3>
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: "16px",
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                display: "inline-block",
+                marginBottom: "16px",
+              }}
+            >
+              <img
+                src={qrImage.value}
+                alt="Xaman QR Code"
+                width={220}
+                height={220}
+                style={{ width: "220px", height: "220px", display: "block" }}
+              />
             </div>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#6b7280",
+                marginBottom: "16px",
+                lineHeight: "1.5",
+              }}
+            >
+              Open Xaman and scan this QR code to sign in
+            </p>
+            <button
+              class="cursor-pointer"
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: "14px",
+                border: "none",
+                background: "rgba(0,0,0,0.05)",
+                color: "#374151",
+                fontWeight: "500",
+                fontSize: "14px",
+                transition: "background 0.2s",
+              }}
+              onClick$={() => (showQrModal.value = false)}
+            >
+              Cancel
+            </button>
           </div>
         </>
       )}

@@ -62,6 +62,11 @@ export default component$(() => {
   const walletAddress = useSignal("");
   const walletDisplayName = useSignal("");
 
+  // Track whether client-side wallet restoration has finished.
+  // Until it has, we should NOT redirect away from /dashboard —
+  // the user may well be connected but we haven't read localStorage yet.
+  const walletRestored = useSignal(false);
+
   useContextProvider(WalletContext, {
     connected: walletConnected,
     walletType,
@@ -78,6 +83,7 @@ export default component$(() => {
     }
   });
 
+  // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(() => {
     if (typeof localStorage !== "undefined") {
       const saved = localStorage.getItem("preferredNetwork");
@@ -93,26 +99,16 @@ export default component$(() => {
       walletAddress.value = session.address;
       walletDisplayName.value = session.name ?? "";
     }
+
+    // Mark restoration complete so the route guard below can act
+    walletRestored.value = true;
   });
 
   const serverSession = useXamanSession();
   const location = useLocation();
   const nav = useNavigate();
 
-  useTask$(({ track }) => {
-    const pathname = track(() => location.url.pathname);
-    const serverConnected = track(() => serverSession.value?.connected);
-    const clientConnected = track(() => walletConnected.value);
-
-    if (
-      pathname.startsWith("/dashboard") &&
-      !serverConnected &&
-      !clientConnected
-    ) {
-      nav("/");
-    }
-  });
-
+  // ── Hydrate wallet from server-side Xaman JWT (if present) ──
   useTask$(({ track }) => {
     const sess = track(() => serverSession.value);
     if (sess?.connected && sess.address) {
@@ -122,6 +118,29 @@ export default component$(() => {
       if (!walletType.value) {
         walletType.value = "xaman";
       }
+    }
+  });
+
+  // ── Dashboard route guard ──
+  // Only redirect AFTER wallet restoration has completed on the client.
+  // This prevents a flash-redirect when the user is actually connected
+  // via localStorage but the signal hasn't been populated yet on first render.
+  // eslint-disable-next-line qwik/no-use-visible-task
+  useVisibleTask$(({ track }) => {
+    const pathname = track(() => location.url.pathname);
+    const clientConnected = track(() => walletConnected.value);
+    const restored = track(() => walletRestored.value);
+    const serverConnected = serverSession.value?.connected;
+
+    // Wait until client-side restoration is done before deciding
+    if (!restored) return;
+
+    if (
+      pathname.startsWith("/dashboard") &&
+      !serverConnected &&
+      !clientConnected
+    ) {
+      nav("/");
     }
   });
 

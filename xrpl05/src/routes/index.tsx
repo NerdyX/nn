@@ -91,10 +91,6 @@ export default component$(() => {
           animation: fadeInUp 0.8s ease-out 0.6s backwards;
         }
 
-        .hero-button {
-          animation: fadeInUp 0.8s ease-out 0.8s backwards;
-        }
-
         .hero-cards {
           animation: fadeInUp 0.8s ease-out 1s backwards;
         }

@@ -119,6 +119,7 @@ const formatAmount = (amt: any, native: string) => {
 };
 
 // Get token icon from currency code
+
 const getTokenIcon = (currency: string, issuer: string) => {
   // Check if it's a hex currency code
   if (currency.length === 40) {
@@ -134,7 +135,7 @@ const getTokenIcon = (currency: string, issuer: string) => {
   }
 
   // Use a token icon service or return a default icon
-  return `https://cdn.bithomp.com/issued-token/${issuer}/${currency}.png/jpeg/icon`;
+  return `https://cdn.bithomp.com/issued-token/${issuer}/${currency}/.png/jpeg/icon`;
 };
 
 const formatDate = (dateInput?: string | number) => {

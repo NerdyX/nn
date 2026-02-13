@@ -7,10 +7,10 @@ export const onPost: RequestHandler = async (requestEvent) => {
   try {
     const apiKey =
       (requestEvent.env.get("PUBLIC_XAMAN_API_KEY") as string | undefined) ??
-      process.env.PUBLIC_XAMAN_API_KEY;
+      process.env.XAMAN_CLIENT_ID;
     const apiSecret =
       (requestEvent.env.get("XAMAN_API_SECRET") as string | undefined) ??
-      process.env.XAMAN_API_SECRET;
+      process.env.XAMAN_CLIENT_SECRET;
 
     if (!apiKey || !apiSecret) {
       requestEvent.json(500, {
@@ -31,14 +31,13 @@ export const onPost: RequestHandler = async (requestEvent) => {
 
     if (!txjson || !txjson.TransactionType) {
       requestEvent.json(400, {
-        error:
-          "Transaction JSON with a valid TransactionType is required",
+        error: "Transaction JSON with a valid TransactionType is required",
       });
       return;
     }
 
     const appUrl =
-      requestEvent.env.get("PUBLIC_APP_URL") ?? "http://localhost:5173";
+      requestEvent.env.get("PUBLIC_APP_URL") ?? "https://xrpl05.pages.dev/";
 
     // Determine the network definition to pass to Xaman
     // Xahau requires the NetworkId field so Xaman routes the

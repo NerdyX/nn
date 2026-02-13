@@ -9,10 +9,10 @@ export const onPost: RequestHandler = async (requestEvent) => {
     // Fallback to process.env for local dev
     const apiKey =
       (requestEvent.env.get("PUBLIC_XAMAN_API_KEY") as string | undefined) ??
-      process.env.PUBLIC_XAMAN_API_KEY;
+      process.env.XAMAN_CLIENT_ID;
     const apiSecret =
       (requestEvent.env.get("XAMAN_API_SECRET") as string | undefined) ??
-      process.env.XAMAN_API_SECRET;
+      process.env.XAMAN_CLIENT_SECRET;
 
     if (!apiKey || !apiSecret) {
       requestEvent.json(500, {
@@ -30,7 +30,7 @@ export const onPost: RequestHandler = async (requestEvent) => {
     const { txjson } = body;
 
     const appUrl =
-      requestEvent.env.get("PUBLIC_APP_URL") ?? "http://localhost:5173";
+      requestEvent.env.get("PUBLIC_APP_URL") ?? "https://xrpl05.pages.dev/";
 
     // Create a SignIn payload (or custom transaction)
     const payload = await xumm.payload?.create({

@@ -7,10 +7,10 @@ export const onGet: RequestHandler = async (requestEvent) => {
   try {
     const apiKey =
       (requestEvent.env.get("PUBLIC_XAMAN_API_KEY") as string | undefined) ??
-      process.env.PUBLIC_XAMAN_API_KEY;
+      process.env.XAMAN_CLIENT_ID;
     const apiSecret =
       (requestEvent.env.get("XAMAN_API_SECRET") as string | undefined) ??
-      process.env.XAMAN_API_SECRET;
+      process.env.XAMAN_CLIENT_SECRET;
 
     if (!apiKey || !apiSecret) {
       requestEvent.json(500, {
@@ -44,7 +44,7 @@ export const onGet: RequestHandler = async (requestEvent) => {
     // If signed, set JWT cookie for session persistence
     if (payload.meta.signed && payload.response?.account) {
       requestEvent.cookie.set("xaman_jwt", payload.response.account, {
-        path: "/",
+        path: "/dashboard",
         httpOnly: true,
         secure: true,
         sameSite: "lax",
@@ -77,8 +77,7 @@ export const onGet: RequestHandler = async (requestEvent) => {
       custom_meta: payload.custom_meta,
     });
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
+    const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Xaman payload check error:", message);
 
     requestEvent.json(500, {

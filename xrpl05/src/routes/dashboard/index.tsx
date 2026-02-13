@@ -11,6 +11,7 @@ import { useWalletContext } from "~/context/wallet-context";
 import { signTransaction, waitForSignature } from "~/lib/xaman-auth";
 
 import "./dashboard.css";
+//import { useAuthContext } from "~/context/auth-context";
 
 export default component$(() => {
   const { activeNetwork, wsUrl } = useNetworkContext();

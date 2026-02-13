@@ -722,7 +722,16 @@ async function fetchXLS20Nfts(
     };
     if (marker) params.marker = marker;
 
-    const res = await rpc(network, "ledger_data", params);
+    let res: any;
+    try {
+      res = await rpc(network, "ledger_data", params);
+    } catch (err: any) {
+      if (String(err?.message ?? err).includes("markerDoesNotExist")) {
+        console.warn("[marketplace] stale marker, stopping NFT scan early");
+        break;
+      }
+      throw err;
+    }
     marker = res.marker;
 
     const nftEntries: { token: RawNFToken; owner: string }[] = [];
@@ -852,7 +861,18 @@ async function fetchTokensFromLedger(
       limit: 400,
     };
     if (marker) params.marker = marker;
-    const res = await rpc(network, "ledger_data", params);
+
+    let res: any;
+    try {
+      res = await rpc(network, "ledger_data", params);
+    } catch (err: any) {
+      // Marker may become invalid between paginated requests
+      if (String(err?.message ?? err).includes("markerDoesNotExist")) {
+        console.warn("[marketplace] stale marker, stopping ledger scan early");
+        break;
+      }
+      throw err;
+    }
     marker = res.marker;
 
     for (const line of res.state || []) {

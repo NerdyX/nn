@@ -384,12 +384,14 @@ export const HeaderModern = component$<HeaderProps>(() => {
             animation: "slideDown 0.25s ease-out",
           }}
         >
-          <style>{`
+          <style
+            dangerouslySetInnerHTML={`
             @keyframes slideDown {
               from { opacity: 0; transform: translateY(-8px); }
               to { opacity: 1; transform: translateY(0); }
             }
-          `}</style>
+          `}
+          />
           <nav class="p-3 space-y-1">
             {navItems.map((item) => (
               <button
@@ -520,12 +522,14 @@ export const HeaderModern = component$<HeaderProps>(() => {
             }}
             onClick$={(e) => e.stopPropagation()}
           >
-            <style>{`
+            <style
+              dangerouslySetInnerHTML={`
               @keyframes modalIn {
                 from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
                 to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
               }
-            `}</style>
+            `}
+            />
 
             {/* Header */}
             <div
@@ -787,11 +791,13 @@ export const HeaderModern = component$<HeaderProps>(() => {
               </button>
             </div>
 
-            <style>{`
+            <style
+              dangerouslySetInnerHTML={`
               @keyframes spin {
                 to { transform: rotate(360deg); }
               }
-            `}</style>
+            `}
+            />
 
             {/* Footer */}
             <p

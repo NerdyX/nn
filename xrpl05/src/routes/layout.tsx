@@ -31,6 +31,7 @@ export const useXamanSession = routeLoader$(async ({ cookie }) => {
       headers: {
         Authorization: `Bearer ${jwt}`,
       },
+      signal: AbortSignal.timeout(8_000),
     });
 
     if (!res.ok) {
@@ -44,8 +45,14 @@ export const useXamanSession = routeLoader$(async ({ cookie }) => {
       address: userinfo.sub ?? null,
       name: userinfo.name ?? null,
     };
-  } catch (err) {
-    console.error("Xaman session validation failed:", err);
+  } catch (err: any) {
+    const reason =
+      err?.cause?.code === "ENOTFOUND"
+        ? `DNS lookup failed for ${err.cause.hostname}`
+        : err?.name === "TimeoutError"
+          ? "request timed out"
+          : String(err?.message ?? err);
+    console.warn(`[xaman] session check skipped: ${reason}`);
     cookie.delete("xaman_jwt", { path: "/" });
     return { connected: false, address: null, name: null };
   }

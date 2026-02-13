@@ -35,7 +35,7 @@ export const useTokenLoader = routeLoader$(async (requestEvent) => {
   const db = getD1(requestEvent.platform as Record<string, any> | undefined);
   const network = (requestEvent.query.get("network") || "xrpl").toLowerCase();
   try {
-    return await loadTokens(network, 100, db);
+    return await loadTokens(network, 200, db);
   } catch (err) {
     console.error("[shop/routeLoader$] token load failed:", err);
     return {
@@ -55,7 +55,7 @@ export const useNftLoader = routeLoader$(async (requestEvent) => {
   const db = getD1(requestEvent.platform as Record<string, any> | undefined);
   const network = (requestEvent.query.get("network") || "xrpl").toLowerCase();
   try {
-    return await loadNfts(network, 50, db);
+    return await loadNfts(network, 200, db);
   } catch (err) {
     console.error("[shop/routeLoader$] nft load failed:", err);
     return {
@@ -1209,12 +1209,14 @@ const TokenDetailModal = component$<{
           }}
           onClick$={(e) => e.stopPropagation()}
         >
-          <style>{`
-          @keyframes modalIn {
-            from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
-            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-          }
-        `}</style>
+          <style
+            dangerouslySetInnerHTML={`
+            @keyframes modalIn {
+              from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+              to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            }
+          `}
+          />
 
           <div style={{ padding: "28px" }}>
             {/* Header */}
@@ -1602,13 +1604,15 @@ const NftDetailModal = component$<{
         }}
         onClick$={(e) => e.stopPropagation()}
       >
-        <style>{`
+        <style
+          dangerouslySetInnerHTML={`
           @keyframes modalIn {
             from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
             to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
           }
           @keyframes spin { to { transform: rotate(360deg); } }
-        `}</style>
+        `}
+        />
 
         {/* Header image */}
         <div
@@ -2081,8 +2085,9 @@ export default component$(() => {
   const tokenData = useTokenLoader();
   const nftData = useNftLoader();
 
-  // Mode toggle
+  // Mode toggles
   const marketMode = useSignal<"nfts" | "tokens">("tokens");
+  const subTab = useSignal<"featured" | "browse">("featured");
 
   // NFT state
   const nfts = useSignal<NftItem[]>([]);
@@ -2090,7 +2095,7 @@ export default component$(() => {
   const nftError = useSignal("");
   const nftSearch = useSignal("");
   const nftPage = useSignal(1);
-  const NFT_PAGE_SIZE = 24;
+  const NFT_PAGE_SIZE = 32;
   const selectedNft = useSignal<NftItem | null>(null);
 
   // Token state
@@ -2123,7 +2128,7 @@ export default component$(() => {
     nftError.value = "";
     try {
       const res = await fetch(
-        `/api/marketplace/all?network=${activeNetwork.value}&type=nfts&limit=50`,
+        `/api/marketplace/all?network=${activeNetwork.value}&type=nfts&limit=200`,
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { nfts?: NftItem[] };
@@ -2141,7 +2146,7 @@ export default component$(() => {
     tokError.value = "";
     try {
       const res = await fetch(
-        `/api/marketplace/all?network=${activeNetwork.value}&type=tokens&limit=100`,
+        `/api/marketplace/all?network=${activeNetwork.value}&type=tokens&limit=200`,
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { tokens?: TokenItem[] };
@@ -2168,9 +2173,60 @@ export default component$(() => {
     }
   });
 
+  // Network switch helper (used by network tab buttons)
+  const switchNetwork = $((net: "xrpl" | "xahau") => {
+    if (activeNetwork.value !== net) {
+      activeNetwork.value = net;
+      subTab.value = "featured";
+      nftPage.value = 1;
+      tokPage.value = 1;
+      nftSearch.value = "";
+      tokSearch.value = "";
+    }
+  });
+
   // ── NFT computed values ──────────────────────────────────────────────────
   const featuredNfts = useComputed$(() =>
-    nfts.value.filter((n) => n.sellOffers?.length > 0 && n.image).slice(0, 6),
+    nfts.value.filter((n) => n.sellOffers?.length > 0 && n.image).slice(0, 8),
+  );
+
+  const topSales = useComputed$(() =>
+    [...nfts.value]
+      .filter((n) => n.sellOffers?.length > 0)
+      .sort((a, b) => {
+        const pa =
+          typeof a.sellOffers[0]?.amount === "string"
+            ? Number(a.sellOffers[0].amount)
+            : 0;
+        const pb =
+          typeof b.sellOffers[0]?.amount === "string"
+            ? Number(b.sellOffers[0].amount)
+            : 0;
+        return pb - pa;
+      })
+      .slice(0, 8),
+  );
+
+  const trendingNfts = useComputed$(() =>
+    [...nfts.value]
+      .sort(
+        (a, b) =>
+          (b.buyOffers?.length || 0) +
+          (b.sellOffers?.length || 0) -
+          ((a.buyOffers?.length || 0) + (a.sellOffers?.length || 0)),
+      )
+      .slice(0, 8),
+  );
+
+  // ── Token featured values ────────────────────────────────────────────────
+  const featuredTokens = useComputed$(() =>
+    tokens.value.filter((t) => t.priceUsd && t.priceUsd > 0).slice(0, 10),
+  );
+
+  const topByTrustlines = useComputed$(() =>
+    [...tokens.value]
+      .sort((a, b) => (b.trustlines || 0) - (a.trustlines || 0))
+      .slice(0, 5),
   );
 
   const nftFiltered = useComputed$(() => {
@@ -2248,13 +2304,15 @@ export default component$(() => {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div class="mt-16" style={{ minHeight: "100vh" }}>
-      <style>{`
+      <style
+        dangerouslySetInnerHTML={`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes modalIn {
           from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
           to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
-      `}</style>
+      `}
+      />
 
       {/* NFT Detail Modal */}
       {selectedNft.value && (
@@ -2284,7 +2342,7 @@ export default component$(() => {
       )}
 
       {/* ── Page Header ── */}
-      <div style={{ marginBottom: "32px" }}>
+      <div style={{ marginBottom: "24px" }}>
         <h1
           style={{
             fontSize: "32px",
@@ -2304,83 +2362,173 @@ export default component$(() => {
         </p>
       </div>
 
-      {/* ── Mode Toggle + Refresh ── */}
+      {/* ═══════════════════════════════════════════════════════════════════════
+           3-TIER TAB BAR
+         ═══════════════════════════════════════════════════════════════════════ */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "32px",
-          flexWrap: "wrap",
+          flexDirection: "column",
           gap: "12px",
+          marginBottom: "28px",
         }}
       >
+        {/* ── Row 1: Network tabs (XRPL / Xahau) + Refresh ── */}
         <div
           style={{
-            display: "inline-flex",
-            background: "rgba(0,0,0,0.04)",
-            borderRadius: "12px",
-            padding: "4px",
-            gap: "4px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
           }}
         >
-          {(["tokens", "nfts"] as const).map((mode) => (
-            <button
-              key={mode}
-              class="cursor-pointer"
-              style={{
-                padding: "8px 20px",
-                borderRadius: "10px",
-                border: "none",
-                fontSize: "13px",
-                fontWeight: "600",
-                background:
-                  marketMode.value === mode ? "#111827" : "transparent",
-                color: marketMode.value === mode ? "#fff" : "#6b7280",
-                transition: "all 0.2s",
-              }}
-              onClick$={() => (marketMode.value = mode)}
-            >
-              {mode === "nfts" ? "\uD83D\uDDBC NFTs" : "\uD83E\uDE99 Tokens"}
-            </button>
-          ))}
-        </div>
-
-        <button
-          class="cursor-pointer"
-          style={{
-            padding: "8px 16px",
-            borderRadius: "10px",
-            border: "1px solid rgba(0,0,0,0.08)",
-            background: "#fff",
-            fontSize: "13px",
-            fontWeight: "500",
-            color: "#374151",
-          }}
-          onClick$={() => {
-            if (marketMode.value === "nfts") fetchNfts();
-            else fetchTokens();
-          }}
-        >
-          \u21BB Refresh
-        </button>
-      </div>
-
-      {/* ══════════════════════════════════════════════════════════════════════
-           TOKEN MODE
-         ══════════════════════════════════════════════════════════════════════ */}
-      {marketMode.value === "tokens" && (
-        <div>
-          {/* Stats bar */}
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: "12px",
-              marginBottom: "32px",
+              display: "inline-flex",
+              background: "rgba(0,0,0,0.04)",
+              borderRadius: "12px",
+              padding: "4px",
+              gap: "4px",
             }}
           >
-            {[
+            {(["xrpl", "xahau"] as const).map((net) => {
+              const cfg = NETWORK_CONFIG[net];
+              const isActive = activeNetwork.value === net;
+              return (
+                <button
+                  key={net}
+                  class="cursor-pointer"
+                  style={{
+                    padding: "8px 20px",
+                    borderRadius: "10px",
+                    border: "none",
+                    fontSize: "13px",
+                    fontWeight: "700",
+                    background: isActive ? cfg.color : "transparent",
+                    color: isActive ? "#fff" : "#6b7280",
+                    transition: "all 0.2s",
+                    letterSpacing: "0.02em",
+                  }}
+                  onClick$={() => switchNetwork(net)}
+                >
+                  {cfg.shortLabel}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            class="cursor-pointer"
+            style={{
+              padding: "8px 16px",
+              borderRadius: "10px",
+              border: "1px solid rgba(0,0,0,0.08)",
+              background: "#fff",
+              fontSize: "13px",
+              fontWeight: "500",
+              color: "#374151",
+            }}
+            onClick$={() => {
+              fetchNfts();
+              fetchTokens();
+            }}
+          >
+            {"\u21BB"} Refresh
+          </button>
+        </div>
+
+        {/* ── Row 2: Asset type (Tokens / NFTs) ── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              background: "rgba(0,0,0,0.04)",
+              borderRadius: "12px",
+              padding: "4px",
+              gap: "4px",
+            }}
+          >
+            {(["tokens", "nfts"] as const).map((mode) => (
+              <button
+                key={mode}
+                class="cursor-pointer"
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  background:
+                    marketMode.value === mode ? "#111827" : "transparent",
+                  color: marketMode.value === mode ? "#fff" : "#6b7280",
+                  transition: "all 0.2s",
+                }}
+                onClick$={() => {
+                  marketMode.value = mode;
+                  subTab.value = "featured";
+                }}
+              >
+                {mode === "nfts" ? "\uD83D\uDDBC NFTs" : "\uD83E\uDE99 Tokens"}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Sub-tabs: Featured / Browse ── */}
+          <div style={{ display: "inline-flex", gap: "2px" }}>
+            {(["featured", "browse"] as const).map((tab) => (
+              <button
+                key={tab}
+                class="cursor-pointer"
+                style={{
+                  padding: "7px 16px",
+                  borderRadius: "10px",
+                  border:
+                    subTab.value === tab
+                      ? "1px solid rgba(0,0,0,0.12)"
+                      : "1px solid transparent",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  background: subTab.value === tab ? "#fff" : "transparent",
+                  color: subTab.value === tab ? "#111827" : "#9ca3af",
+                  boxShadow:
+                    subTab.value === tab
+                      ? "0 1px 3px rgba(0,0,0,0.06)"
+                      : "none",
+                  transition: "all 0.2s",
+                  textTransform: "capitalize",
+                }}
+                onClick$={() => (subTab.value = tab)}
+              >
+                {tab === "featured"
+                  ? "\u2728 Featured"
+                  : "\uD83D\uDD0D Browse All"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+           STATS BAR (shared for both modes)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: "12px",
+          marginBottom: "32px",
+        }}
+      >
+        {marketMode.value === "tokens"
+          ? [
               {
                 label: "Total Tokens",
                 value: tokens.value.length.toLocaleString(),
@@ -2433,267 +2581,8 @@ export default component$(() => {
                   {s.value}
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Loading state */}
-          {tokLoading.value && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "80px 0",
-                gap: "16px",
-              }}
-            >
-              <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  border: "3px solid #e5e7eb",
-                  borderTopColor: "#2563eb",
-                  borderRadius: "50%",
-                  animation: "spin 0.7s linear infinite",
-                }}
-              />
-              <div style={{ fontSize: "14px", color: "#9ca3af" }}>
-                Loading tokens from {networkConfig.value.label}\u2026
-              </div>
-            </div>
-          )}
-
-          {/* Error state */}
-          {tokError.value && (
-            <div
-              style={{
-                padding: "16px 20px",
-                borderRadius: "12px",
-                background: "rgba(239,68,68,0.06)",
-                border: "1px solid rgba(239,68,68,0.15)",
-                color: "#dc2626",
-                fontSize: "14px",
-                marginBottom: "24px",
-              }}
-            >
-              {tokError.value}
-            </div>
-          )}
-
-          {!tokLoading.value && !tokError.value && (
-            <>
-              {/* Search + header */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "16px",
-                  flexWrap: "wrap",
-                  gap: "12px",
-                }}
-              >
-                <h2
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: "700",
-                    color: "#111827",
-                  }}
-                >
-                  All Tokens
-                </h2>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    flex: "1",
-                    maxWidth: "400px",
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search currency, issuer, domain\u2026"
-                    value={tokSearch.value}
-                    onInput$={(e: any) => {
-                      tokSearch.value = e.target.value;
-                      tokPage.value = 1;
-                    }}
-                    style={{
-                      flex: "1",
-                      padding: "8px 14px",
-                      borderRadius: "10px",
-                      border: "1px solid rgba(0,0,0,0.1)",
-                      fontSize: "13px",
-                      outline: "none",
-                      background: "#fff",
-                      color: "#111827",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Column headers */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "8px 16px",
-                  borderBottom: "1px solid rgba(0,0,0,0.06)",
-                  marginBottom: "4px",
-                  fontSize: "10px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  fontWeight: "700",
-                  color: "#9ca3af",
-                }}
-              >
-                <div style={{ width: "28px", textAlign: "center" }}>#</div>
-                <div style={{ width: "36px" }} />
-                <div style={{ flex: "1" }}>Token</div>
-                <div style={{ minWidth: "80px", textAlign: "right" }}>
-                  Price
-                </div>
-                <div
-                  class="hidden sm:block"
-                  style={{ minWidth: "65px", textAlign: "right" }}
-                >
-                  24h
-                </div>
-                <div
-                  class="hidden md:block"
-                  style={{ minWidth: "80px", textAlign: "center" }}
-                >
-                  Chart
-                </div>
-                <div style={{ minWidth: "70px", textAlign: "right" }}>
-                  Trustlines
-                </div>
-              </div>
-
-              {tokPaginated.value.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "60px 0",
-                    color: "#9ca3af",
-                  }}
-                >
-                  <div style={{ fontSize: "40px", marginBottom: "12px" }}>
-                    \uD83D\uDD0D
-                  </div>
-                  <div style={{ fontSize: "15px", fontWeight: "600" }}>
-                    No tokens found
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div>
-                    {tokPaginated.value.map((tok, idx) => {
-                      const globalIdx =
-                        (tokPage.value - 1) * TOK_PAGE_SIZE + idx;
-                      const key = `${tok.currency}:${tok.issuer}`;
-                      return (
-                        <TokenRow
-                          key={key}
-                          token={tok}
-                          index={globalIdx}
-                          sparkData={tokenSparklines.value[key] || []}
-                          onSelect$={(t: TokenItem) => {
-                            selectedToken.value = t;
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-
-                  {/* Pagination */}
-                  {tokTotalPages.value > 1 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px",
-                        paddingTop: "20px",
-                        marginTop: "16px",
-                        borderTop: "1px solid rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      <button
-                        class="cursor-pointer"
-                        disabled={tokPage.value <= 1}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "8px",
-                          border: "1px solid rgba(0,0,0,0.1)",
-                          background: "#fff",
-                          fontSize: "13px",
-                          opacity: tokPage.value <= 1 ? "0.3" : "1",
-                        }}
-                        onClick$={() => {
-                          tokPage.value = Math.max(1, tokPage.value - 1);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                      >
-                        \u2190 Prev
-                      </button>
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          color: "#6b7280",
-                          padding: "0 12px",
-                        }}
-                      >
-                        Page {tokPage.value} of {tokTotalPages.value}
-                      </span>
-                      <button
-                        class="cursor-pointer"
-                        disabled={tokPage.value >= tokTotalPages.value}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "8px",
-                          border: "1px solid rgba(0,0,0,0.1)",
-                          background: "#fff",
-                          fontSize: "13px",
-                          opacity:
-                            tokPage.value >= tokTotalPages.value ? "0.3" : "1",
-                        }}
-                        onClick$={() => {
-                          tokPage.value = Math.min(
-                            tokTotalPages.value,
-                            tokPage.value + 1,
-                          );
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                      >
-                        Next \u2192
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════
-           NFT MODE
-         ══════════════════════════════════════════════════════════════════════ */}
-      {marketMode.value === "nfts" && (
-        <div>
-          {/* Stats bar */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: "12px",
-              marginBottom: "40px",
-            }}
-          >
-            {[
+            ))
+          : [
               {
                 label: "Total NFTs",
                 value: nftStats.value.total.toLocaleString(),
@@ -2743,257 +2632,896 @@ export default component$(() => {
                 </div>
               </div>
             ))}
+      </div>
+
+      {/* Loading state (shared) */}
+      {(marketMode.value === "tokens"
+        ? tokLoading.value
+        : nftLoading.value) && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "80px 0",
+            gap: "16px",
+          }}
+        >
+          <div
+            style={{
+              width: "32px",
+              height: "32px",
+              border: "3px solid #e5e7eb",
+              borderTopColor: "#2563eb",
+              borderRadius: "50%",
+              animation: "spin 0.7s linear infinite",
+            }}
+          />
+          <div style={{ fontSize: "14px", color: "#9ca3af" }}>
+            Loading {marketMode.value === "tokens" ? "tokens" : "NFTs"} from{" "}
+            {networkConfig.value.label}
+            {"\u2026"}
           </div>
+        </div>
+      )}
 
-          {/* Loading state */}
-          {nftLoading.value && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "80px 0",
-                gap: "16px",
-              }}
-            >
-              <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  border: "3px solid #e5e7eb",
-                  borderTopColor: "#2563eb",
-                  borderRadius: "50%",
-                  animation: "spin 0.7s linear infinite",
-                }}
-              />
-              <div style={{ fontSize: "14px", color: "#9ca3af" }}>
-                Loading NFTs from {networkConfig.value.label}
-                {"\u2026"}
-              </div>
-            </div>
-          )}
+      {/* Error state (shared) */}
+      {(marketMode.value === "tokens" ? tokError.value : nftError.value) && (
+        <div
+          style={{
+            padding: "16px 20px",
+            borderRadius: "12px",
+            background: "rgba(239,68,68,0.06)",
+            border: "1px solid rgba(239,68,68,0.15)",
+            color: "#dc2626",
+            fontSize: "14px",
+            marginBottom: "24px",
+          }}
+        >
+          {marketMode.value === "tokens" ? tokError.value : nftError.value}
+        </div>
+      )}
 
-          {/* Error state */}
-          {nftError.value && (
-            <div
-              style={{
-                padding: "16px 20px",
-                borderRadius: "12px",
-                background: "rgba(239,68,68,0.06)",
-                border: "1px solid rgba(239,68,68,0.15)",
-                color: "#dc2626",
-                fontSize: "14px",
-                marginBottom: "24px",
-              }}
-            >
-              {nftError.value}
-            </div>
-          )}
+      {/* ══════════════════════════════════════════════════════════════════════
+           TOKENS — FEATURED
+         ══════════════════════════════════════════════════════════════════════ */}
+      {marketMode.value === "tokens" &&
+        subTab.value === "featured" &&
+        !tokLoading.value &&
+        !tokError.value && (
+          <div>
+            {/* Top Tokens by Price — Featured Cards */}
+            {featuredTokens.value.length > 0 && (
+              <section style={{ marginBottom: "48px" }}>
+                <h2
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: "#111827",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {"\uD83D\uDD25"} Top Tokens
+                </h2>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#9ca3af",
+                    marginBottom: "20px",
+                  }}
+                >
+                  Tokens with live price data on {networkConfig.value.label}
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(220px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  {featuredTokens.value.map((tok, i) => {
+                    const key = `${tok.currency}:${tok.issuer}`;
+                    const sparkData = tokenSparklines.value[key] || [];
+                    return (
+                      <div
+                        key={key}
+                        class="cursor-pointer"
+                        style={{
+                          padding: "18px",
+                          borderRadius: "16px",
+                          background:
+                            i === 0
+                              ? "linear-gradient(135deg, #111827, #1e3a5f)"
+                              : "#fff",
+                          border:
+                            i === 0 ? "none" : "1px solid rgba(0,0,0,0.06)",
+                          color: i === 0 ? "#fff" : "#111827",
+                          boxShadow:
+                            i === 0
+                              ? "0 8px 24px rgba(0,0,0,0.15)"
+                              : "0 1px 3px rgba(0,0,0,0.04)",
+                          transition: "all 0.2s",
+                        }}
+                        onClick$={() => (selectedToken.value = tok)}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            marginBottom: "14px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              background:
+                                i === 0
+                                  ? "rgba(255,255,255,0.15)"
+                                  : "linear-gradient(135deg, #dbeafe, #bfdbfe)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              overflow: "hidden",
+                              flexShrink: "0",
+                            }}
+                          >
+                            {tok.logoUrl ? (
+                              <img
+                                src={tok.logoUrl}
+                                alt={tok.currencyDisplay}
+                                width={36}
+                                height={36}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                  borderRadius: "50%",
+                                }}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: "13px",
+                                  fontWeight: "700",
+                                  color: i === 0 ? "#fff" : "#3b82f6",
+                                }}
+                              >
+                                {tok.currencyDisplay.slice(0, 2).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ flex: "1", minWidth: "0" }}>
+                            <div
+                              style={{
+                                fontSize: "15px",
+                                fontWeight: "700",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {tok.currencyDisplay}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: "11px",
+                                color:
+                                  i === 0 ? "rgba(255,255,255,0.5)" : "#9ca3af",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {tok.domain || truncAddr(tok.issuer)}
+                            </div>
+                          </div>
+                        </div>
 
-          {!nftLoading.value && !nftError.value && (
-            <>
-              {/* ── Featured NFTs ── */}
-              {featuredNfts.value.length > 0 && (
-                <section style={{ marginBottom: "48px" }}>
-                  <h2
-                    style={{
-                      fontSize: "20px",
-                      fontWeight: "700",
-                      color: "#111827",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    {"\u2728"} Featured
-                  </h2>
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "#9ca3af",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    Listed NFTs on {networkConfig.value.label}
-                  </p>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fill, minmax(200px, 1fr))",
-                      gap: "16px",
-                    }}
-                  >
-                    {featuredNfts.value.map((nft) => (
-                      <NftCard
-                        key={nft.nftokenId}
-                        nft={nft}
-                        nativeCurrency={nativeCurrency.value}
-                        onSelect$={(n: NftItem) => (selectedNft.value = n)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+                        {/* Price row */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          <div style={{ fontSize: "16px", fontWeight: "800" }}>
+                            {tok.priceUsd ? formatUsd(tok.priceUsd) : "\u2014"}
+                          </div>
+                          {tok.change24h !== undefined &&
+                            tok.change24h !== 0 && (
+                              <div
+                                style={{
+                                  fontSize: "12px",
+                                  fontWeight: "700",
+                                  color:
+                                    tok.change24h > 0 ? "#10b981" : "#ef4444",
+                                  background:
+                                    tok.change24h > 0
+                                      ? "rgba(16,185,129,0.1)"
+                                      : "rgba(239,68,68,0.1)",
+                                  padding: "2px 8px",
+                                  borderRadius: "6px",
+                                }}
+                              >
+                                {tok.change24h > 0 ? "+" : ""}
+                                {tok.change24h.toFixed(1)}%
+                              </div>
+                            )}
+                        </div>
 
-              {/* ── Browse All NFTs ── */}
-              <section>
+                        {/* Sparkline chart */}
+                        {sparkData.length > 1 && (
+                          <div style={{ marginBottom: "12px" }}>
+                            <MiniChart
+                              data={sparkData}
+                              width={180}
+                              height={36}
+                              color={i === 0 ? "#60a5fa" : undefined}
+                            />
+                          </div>
+                        )}
+
+                        {/* Stats row */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "8px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              padding: "6px 8px",
+                              borderRadius: "8px",
+                              background:
+                                i === 0
+                                  ? "rgba(255,255,255,0.08)"
+                                  : "rgba(0,0,0,0.02)",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: "9px",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                                color:
+                                  i === 0 ? "rgba(255,255,255,0.5)" : "#9ca3af",
+                                marginBottom: "2px",
+                              }}
+                            >
+                              Supply
+                            </div>
+                            <div
+                              style={{ fontSize: "12px", fontWeight: "700" }}
+                            >
+                              {formatSupply(tok.totalSupply)}
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              padding: "6px 8px",
+                              borderRadius: "8px",
+                              background:
+                                i === 0
+                                  ? "rgba(255,255,255,0.08)"
+                                  : "rgba(0,0,0,0.02)",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: "9px",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                                color:
+                                  i === 0 ? "rgba(255,255,255,0.5)" : "#9ca3af",
+                                marginBottom: "2px",
+                              }}
+                            >
+                              Trustlines
+                            </div>
+                            <div
+                              style={{ fontSize: "12px", fontWeight: "700" }}
+                            >
+                              {tok.trustlines.toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Top by Trustlines */}
+            {topByTrustlines.value.length > 0 && (
+              <section style={{ marginBottom: "40px" }}>
+                <h2
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: "#111827",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {"\uD83C\uDFC6"} Most Trusted
+                </h2>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#9ca3af",
+                    marginBottom: "16px",
+                  }}
+                >
+                  Tokens with the most trustlines on {networkConfig.value.label}
+                </p>
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: "16px",
-                    flexWrap: "wrap",
-                    gap: "12px",
+                    flexDirection: "column",
+                    gap: "2px",
                   }}
                 >
-                  <h2
-                    style={{
-                      fontSize: "20px",
-                      fontWeight: "700",
-                      color: "#111827",
-                    }}
-                  >
-                    Browse All NFTs
-                  </h2>
+                  {topByTrustlines.value.map((tok, idx) => {
+                    const key = `${tok.currency}:${tok.issuer}`;
+                    return (
+                      <TokenRow
+                        key={key}
+                        token={tok}
+                        index={idx}
+                        sparkData={tokenSparklines.value[key] || []}
+                        onSelect$={(t: TokenItem) => {
+                          selectedToken.value = t;
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Empty state */}
+            {tokens.value.length === 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 0",
+                  color: "#9ca3af",
+                }}
+              >
+                <div style={{ fontSize: "40px", marginBottom: "12px" }}>
+                  {"\uD83E\uDE99"}
+                </div>
+                <div style={{ fontSize: "15px", fontWeight: "600" }}>
+                  No tokens found on {networkConfig.value.label}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+           TOKENS — BROWSE ALL
+         ══════════════════════════════════════════════════════════════════════ */}
+      {marketMode.value === "tokens" &&
+        subTab.value === "browse" &&
+        !tokLoading.value &&
+        !tokError.value && (
+          <div>
+            {/* Search */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "16px",
+                flexWrap: "wrap",
+                gap: "12px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "20px",
+                  fontWeight: "700",
+                  color: "#111827",
+                }}
+              >
+                All Tokens
+              </h2>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flex: "1",
+                  maxWidth: "400px",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search currency, issuer, domain\u2026"
+                  value={tokSearch.value}
+                  onInput$={(e: any) => {
+                    tokSearch.value = e.target.value;
+                    tokPage.value = 1;
+                  }}
+                  style={{
+                    flex: "1",
+                    padding: "8px 14px",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(0,0,0,0.1)",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#fff",
+                    color: "#111827",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Column headers */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "8px 16px",
+                borderBottom: "1px solid rgba(0,0,0,0.06)",
+                marginBottom: "4px",
+                fontSize: "10px",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                fontWeight: "700",
+                color: "#9ca3af",
+              }}
+            >
+              <div style={{ width: "28px", textAlign: "center" }}>#</div>
+              <div style={{ width: "36px" }} />
+              <div style={{ flex: "1" }}>Token</div>
+              <div style={{ minWidth: "80px", textAlign: "right" }}>Price</div>
+              <div
+                class="hidden sm:block"
+                style={{ minWidth: "65px", textAlign: "right" }}
+              >
+                24h
+              </div>
+              <div
+                class="hidden md:block"
+                style={{ minWidth: "80px", textAlign: "center" }}
+              >
+                Chart
+              </div>
+              <div style={{ minWidth: "70px", textAlign: "right" }}>
+                Trustlines
+              </div>
+            </div>
+
+            {tokPaginated.value.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 0",
+                  color: "#9ca3af",
+                }}
+              >
+                <div style={{ fontSize: "40px", marginBottom: "12px" }}>
+                  {"\uD83D\uDD0D"}
+                </div>
+                <div style={{ fontSize: "15px", fontWeight: "600" }}>
+                  No tokens found
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  {tokPaginated.value.map((tok, idx) => {
+                    const globalIdx = (tokPage.value - 1) * TOK_PAGE_SIZE + idx;
+                    const key = `${tok.currency}:${tok.issuer}`;
+                    return (
+                      <TokenRow
+                        key={key}
+                        token={tok}
+                        index={globalIdx}
+                        sparkData={tokenSparklines.value[key] || []}
+                        onSelect$={(t: TokenItem) => {
+                          selectedToken.value = t;
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Pagination */}
+                {tokTotalPages.value > 1 && (
                   <div
                     style={{
                       display: "flex",
-                      gap: "8px",
-                      flex: "1",
-                      maxWidth: "400px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      paddingTop: "20px",
+                      marginTop: "16px",
+                      borderTop: "1px solid rgba(0,0,0,0.06)",
                     }}
                   >
-                    <input
-                      type="text"
-                      placeholder="Search name, collection, ID\u2026"
-                      value={nftSearch.value}
-                      onInput$={(e: any) => {
-                        nftSearch.value = e.target.value;
-                        nftPage.value = 1;
-                      }}
+                    <button
+                      class="cursor-pointer"
+                      disabled={tokPage.value <= 1}
                       style={{
-                        flex: "1",
-                        padding: "8px 14px",
-                        borderRadius: "10px",
+                        padding: "6px 12px",
+                        borderRadius: "8px",
                         border: "1px solid rgba(0,0,0,0.1)",
-                        fontSize: "13px",
-                        outline: "none",
                         background: "#fff",
-                        color: "#111827",
+                        fontSize: "13px",
+                        opacity: tokPage.value <= 1 ? "0.3" : "1",
                       }}
-                    />
-                  </div>
-                </div>
-
-                {nftPaginated.value.length === 0 ? (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "60px 0",
-                      color: "#9ca3af",
-                    }}
-                  >
-                    <div style={{ fontSize: "40px", marginBottom: "12px" }}>
-                      {"\uD83D\uDD0D"}
-                    </div>
-                    <div style={{ fontSize: "15px", fontWeight: "600" }}>
-                      No NFTs found
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(200px, 1fr))",
-                        gap: "16px",
-                        marginBottom: "24px",
+                      onClick$={() => {
+                        tokPage.value = Math.max(1, tokPage.value - 1);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
                     >
-                      {nftPaginated.value.map((nft) => (
-                        <NftCard
-                          key={nft.nftokenId}
-                          nft={nft}
-                          nativeCurrency={nativeCurrency.value}
-                          onSelect$={(n: NftItem) => (selectedNft.value = n)}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Pagination */}
-                    {nftTotalPages.value > 1 && (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "6px",
-                          paddingTop: "20px",
-                          borderTop: "1px solid rgba(0,0,0,0.06)",
-                        }}
-                      >
-                        <button
-                          class="cursor-pointer"
-                          disabled={nftPage.value <= 1}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: "8px",
-                            border: "1px solid rgba(0,0,0,0.1)",
-                            background: "#fff",
-                            fontSize: "13px",
-                            opacity: nftPage.value <= 1 ? "0.3" : "1",
-                          }}
-                          onClick$={() => {
-                            nftPage.value = Math.max(1, nftPage.value - 1);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                        >
-                          {"\u2190"} Prev
-                        </button>
-                        <span
-                          style={{
-                            fontSize: "13px",
-                            color: "#6b7280",
-                            padding: "0 12px",
-                          }}
-                        >
-                          Page {nftPage.value} of {nftTotalPages.value}
-                        </span>
-                        <button
-                          class="cursor-pointer"
-                          disabled={nftPage.value >= nftTotalPages.value}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: "8px",
-                            border: "1px solid rgba(0,0,0,0.1)",
-                            background: "#fff",
-                            fontSize: "13px",
-                            opacity:
-                              nftPage.value >= nftTotalPages.value
-                                ? "0.3"
-                                : "1",
-                          }}
-                          onClick$={() => {
-                            nftPage.value = Math.min(
-                              nftTotalPages.value,
-                              nftPage.value + 1,
-                            );
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                        >
-                          Next {"\u2192"}
-                        </button>
-                      </div>
-                    )}
-                  </>
+                      {"\u2190"} Prev
+                    </button>
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        padding: "0 12px",
+                      }}
+                    >
+                      Page {tokPage.value} of {tokTotalPages.value}
+                    </span>
+                    <button
+                      class="cursor-pointer"
+                      disabled={tokPage.value >= tokTotalPages.value}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(0,0,0,0.1)",
+                        background: "#fff",
+                        fontSize: "13px",
+                        opacity:
+                          tokPage.value >= tokTotalPages.value ? "0.3" : "1",
+                      }}
+                      onClick$={() => {
+                        tokPage.value = Math.min(
+                          tokTotalPages.value,
+                          tokPage.value + 1,
+                        );
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      Next {"\u2192"}
+                    </button>
+                  </div>
                 )}
+              </>
+            )}
+          </div>
+        )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+           NFTs — FEATURED
+         ══════════════════════════════════════════════════════════════════════ */}
+      {marketMode.value === "nfts" &&
+        subTab.value === "featured" &&
+        !nftLoading.value &&
+        !nftError.value && (
+          <div>
+            {/* Featured NFTs (listed with images) */}
+            {featuredNfts.value.length > 0 && (
+              <section style={{ marginBottom: "48px" }}>
+                <h2
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: "#111827",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {"\u2728"} Featured
+                </h2>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#9ca3af",
+                    marginBottom: "16px",
+                  }}
+                >
+                  Listed NFTs on {networkConfig.value.label}
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: "16px",
+                  }}
+                >
+                  {featuredNfts.value.map((nft) => (
+                    <NftCard
+                      key={nft.nftokenId}
+                      nft={nft}
+                      nativeCurrency={nativeCurrency.value}
+                      onSelect$={(n: NftItem) => (selectedNft.value = n)}
+                    />
+                  ))}
+                </div>
               </section>
-            </>
-          )}
-        </div>
-      )}
+            )}
+
+            {/* Top Sales */}
+            {topSales.value.length > 0 && (
+              <section style={{ marginBottom: "48px" }}>
+                <h2
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: "#111827",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {"\uD83C\uDFC6"} Top Sales
+                </h2>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#9ca3af",
+                    marginBottom: "16px",
+                  }}
+                >
+                  Highest priced active listings
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: "16px",
+                  }}
+                >
+                  {topSales.value.map((nft) => (
+                    <NftCard
+                      key={nft.nftokenId}
+                      nft={nft}
+                      nativeCurrency={nativeCurrency.value}
+                      onSelect$={(n: NftItem) => (selectedNft.value = n)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Trending */}
+            {trendingNfts.value.length > 0 && (
+              <section style={{ marginBottom: "48px" }}>
+                <h2
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: "#111827",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {"\uD83D\uDD25"} Trending
+                </h2>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#9ca3af",
+                    marginBottom: "16px",
+                  }}
+                >
+                  Most active NFTs by offers
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: "16px",
+                  }}
+                >
+                  {trendingNfts.value.map((nft) => (
+                    <NftCard
+                      key={nft.nftokenId}
+                      nft={nft}
+                      nativeCurrency={nativeCurrency.value}
+                      onSelect$={(n: NftItem) => (selectedNft.value = n)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Empty state */}
+            {nfts.value.length === 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 0",
+                  color: "#9ca3af",
+                }}
+              >
+                <div style={{ fontSize: "40px", marginBottom: "12px" }}>
+                  {"\uD83D\uDDBC"}
+                </div>
+                <div style={{ fontSize: "15px", fontWeight: "600" }}>
+                  No NFTs found on {networkConfig.value.label}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+           NFTs — BROWSE ALL
+         ══════════════════════════════════════════════════════════════════════ */}
+      {marketMode.value === "nfts" &&
+        subTab.value === "browse" &&
+        !nftLoading.value &&
+        !nftError.value && (
+          <div>
+            {/* Search */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "16px",
+                flexWrap: "wrap",
+                gap: "12px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "20px",
+                  fontWeight: "700",
+                  color: "#111827",
+                }}
+              >
+                Browse All NFTs
+              </h2>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flex: "1",
+                  maxWidth: "400px",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search name, collection, ID\u2026"
+                  value={nftSearch.value}
+                  onInput$={(e: any) => {
+                    nftSearch.value = e.target.value;
+                    nftPage.value = 1;
+                  }}
+                  style={{
+                    flex: "1",
+                    padding: "8px 14px",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(0,0,0,0.1)",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#fff",
+                    color: "#111827",
+                  }}
+                />
+              </div>
+            </div>
+
+            {nftPaginated.value.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 0",
+                  color: "#9ca3af",
+                }}
+              >
+                <div style={{ fontSize: "40px", marginBottom: "12px" }}>
+                  {"\uD83D\uDD0D"}
+                </div>
+                <div style={{ fontSize: "15px", fontWeight: "600" }}>
+                  No NFTs found
+                </div>
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: "16px",
+                    marginBottom: "24px",
+                  }}
+                >
+                  {nftPaginated.value.map((nft) => (
+                    <NftCard
+                      key={nft.nftokenId}
+                      nft={nft}
+                      nativeCurrency={nativeCurrency.value}
+                      onSelect$={(n: NftItem) => (selectedNft.value = n)}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {nftTotalPages.value > 1 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      paddingTop: "20px",
+                      borderTop: "1px solid rgba(0,0,0,0.06)",
+                    }}
+                  >
+                    <button
+                      class="cursor-pointer"
+                      disabled={nftPage.value <= 1}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(0,0,0,0.1)",
+                        background: "#fff",
+                        fontSize: "13px",
+                        opacity: nftPage.value <= 1 ? "0.3" : "1",
+                      }}
+                      onClick$={() => {
+                        nftPage.value = Math.max(1, nftPage.value - 1);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      {"\u2190"} Prev
+                    </button>
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        padding: "0 12px",
+                      }}
+                    >
+                      Page {nftPage.value} of {nftTotalPages.value}
+                    </span>
+                    <button
+                      class="cursor-pointer"
+                      disabled={nftPage.value >= nftTotalPages.value}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(0,0,0,0.1)",
+                        background: "#fff",
+                        fontSize: "13px",
+                        opacity:
+                          nftPage.value >= nftTotalPages.value ? "0.3" : "1",
+                      }}
+                      onClick$={() => {
+                        nftPage.value = Math.min(
+                          nftTotalPages.value,
+                          nftPage.value + 1,
+                        );
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      Next {"\u2192"}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
       {/* ── Footer ── */}
       <footer

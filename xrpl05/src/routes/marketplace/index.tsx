@@ -2,12 +2,41 @@ import {
   component$,
   useSignal,
   useVisibleTask$,
+  useTask$,
   $,
   useComputed$,
 } from "@builder.io/qwik";
+import { routeLoader$ } from "@builder.io/qwik-city";
 import { useWalletContext, truncateAddress } from "~/context/wallet-context";
 import { useNetworkContext, NETWORK_CONFIG } from "~/context/network-context";
 import { signTransaction, waitForSignature } from "~/lib/xaman-auth";
+
+// ─── SSR pre-cache loader — returns cached NFTs from D1 if available ─────────
+
+export const useCachedNfts = routeLoader$(async (requestEvent) => {
+  try {
+    const { loadNfts, getD1 } = await import("~/lib/marketplace-data");
+    const db = getD1(requestEvent.platform as Record<string, any> | undefined);
+    const network = (requestEvent.query.get("network") || "xrpl").toLowerCase();
+    const data = await loadNfts(network, 60, db);
+    return {
+      success: data.success,
+      nfts: (data as any).nfts || ([] as NftItem[]),
+      network,
+      timestamp: (data as any).timestamp || new Date().toISOString(),
+      fromCache: true,
+    };
+  } catch (err) {
+    console.warn("[marketplace] pre-cache loader failed:", err);
+    return {
+      success: false,
+      nfts: [] as NftItem[],
+      network: "xrpl",
+      timestamp: new Date().toISOString(),
+      fromCache: false,
+    };
+  }
+});
 
 // ──────────────────────────────────────────────
 // Types
@@ -42,6 +71,7 @@ interface NftItem {
   collection: string;
   flags: number;
   transferFee: number;
+  nftStandard?: "XLS-20" | "XLS-14" | string;
   sellOffers: SellOffer[];
   buyOffers: BuyOffer[];
 }
@@ -125,12 +155,17 @@ export default component$(() => {
   const wallet = useWalletContext();
   const { activeNetwork } = useNetworkContext();
   const networkConfig = useComputed$(() => NETWORK_CONFIG[activeNetwork.value]);
+  const cachedNfts = useCachedNfts();
 
   // Data state
   const nfts = useSignal<NftItem[]>([]);
   const loading = useSignal(false);
   const errorMsg = useSignal("");
   const marketData = useSignal<MarketplaceData | null>(null);
+
+  // Browse-mode: shows pre-cached ledger NFTs before any address is entered
+  const browseNfts = useSignal<NftItem[]>([]);
+  const browseLoaded = useSignal(false);
 
   // Search / filter state
   const searchQuery = useSignal("");
@@ -161,6 +196,15 @@ export default component$(() => {
   const mintTaxon = useSignal("0");
   const mintTransferFee = useSignal("0");
   const mintFlags = useSignal(8); // tfTransferable
+
+  // ── Hydrate browse NFTs from SSR cache ──
+  useTask$(({ track }) => {
+    const cached = track(() => cachedNfts.value);
+    if (cached.success && cached.nfts.length > 0 && !browseLoaded.value) {
+      browseNfts.value = cached.nfts as NftItem[];
+      browseLoaded.value = true;
+    }
+  });
 
   // ── Fetch NFTs ──
   const fetchNfts = $(async (address: string) => {
@@ -746,13 +790,13 @@ export default component$(() => {
         <div class="flex gap-1 border-b border-gray-200 mb-8">
           {(
             [
-              { id: "explore", label: "🔍 Explore NFTs", always: true },
+              { id: "explore", label: "Explore NFTs", always: true },
               {
                 id: "my-nfts",
-                label: "🖼️ My NFTs",
+                label: "My NFTs",
                 always: false,
               },
-              { id: "mint", label: "✨ Mint NFT", always: false },
+              { id: "mint", label: "Mint NFT", always: false },
             ] as const
           ).map((tab) => (
             <button
@@ -788,7 +832,8 @@ export default component$(() => {
                 >
                   {networkConfig.value.label}
                 </span>
-                . Enter any r-address to explore their collection.
+                . Enter any r-address to explore their collection, or browse
+                recent ledger NFTs below.
               </p>
               <div class="flex gap-3">
                 <input
@@ -930,6 +975,91 @@ export default component$(() => {
                 </span>
               </div>
             )}
+
+            {/* Pre-cached browse NFTs (show when no address searched yet) */}
+            {!loading.value &&
+              nfts.value.length === 0 &&
+              browseNfts.value.length > 0 &&
+              !errorMsg.value && (
+                <div>
+                  <h2 class="text-lg font-bold text-gray-900 mb-4">
+                    Recent NFTs on the Ledger
+                  </h2>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                    {browseNfts.value.slice(0, 24).map((nft) => (
+                      <div
+                        key={nft.nftokenId}
+                        class="group rounded-2xl overflow-hidden bg-white border border-gray-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300 cursor-pointer hover:-translate-y-1"
+                        onClick$={() => (selectedNft.value = nft)}
+                      >
+                        <div class="relative aspect-square overflow-hidden bg-gray-100">
+                          <img
+                            src={nft.image || PLACEHOLDER_IMG}
+                            alt={nft.name}
+                            width={400}
+                            height={400}
+                            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            loading="lazy"
+                            onError$={(e: any) => {
+                              e.target.src = PLACEHOLDER_IMG;
+                            }}
+                          />
+                        </div>
+                        <div class="p-4">
+                          <h3 class="font-bold text-gray-900 truncate">
+                            {nft.name}
+                          </h3>
+                          {nft.collection && (
+                            <p class="text-xs text-blue-600 font-medium mt-0.5 truncate">
+                              {nft.collection}
+                            </p>
+                          )}
+                          <div class="mt-2 text-xs text-gray-400">
+                            {nft.nftStandard || "XLS-20"}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Skeleton placeholders while SSR cache loads */}
+            {!loading.value &&
+              nfts.value.length === 0 &&
+              browseNfts.value.length === 0 &&
+              !errorMsg.value &&
+              !browseLoaded.value && (
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div
+                      key={i}
+                      class="rounded-2xl overflow-hidden bg-white border border-gray-200"
+                    >
+                      <div
+                        class="aspect-square bg-gray-100"
+                        style={{ animation: "pulse 2s ease-in-out infinite" }}
+                      />
+                      <div class="p-4 space-y-2">
+                        <div
+                          class="h-4 bg-gray-100 rounded"
+                          style={{
+                            width: "70%",
+                            animation: "pulse 2s ease-in-out infinite",
+                          }}
+                        />
+                        <div
+                          class="h-3 bg-gray-100 rounded"
+                          style={{
+                            width: "50%",
+                            animation: "pulse 2s ease-in-out infinite",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
             {/* NFT Grid */}
             {!loading.value && paginated.value.length > 0 && (

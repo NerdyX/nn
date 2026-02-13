@@ -101,7 +101,7 @@ async function pollForSignature(uuid: string): Promise<void> {
             );
           }
 
-          window.location.href = "/dashboard";
+          window.location.href = "dashboard";
           resolve();
         } else if (
           data.meta.expired ||

@@ -40,8 +40,8 @@ export const onPost: RequestHandler = async (requestEvent) => {
       options: {
         submit: false,
         return_url: {
-          app: `${appUrl}/dashboard`,
-          web: `${appUrl}/dashboard`,
+          app: `${appUrl}dashboard`,
+          web: `${appUrl}dashboard`,
         },
       },
       custom_meta: {

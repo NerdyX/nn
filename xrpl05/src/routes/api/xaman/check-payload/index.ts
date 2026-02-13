@@ -44,7 +44,7 @@ export const onGet: RequestHandler = async (requestEvent) => {
     // If signed, set JWT cookie for session persistence
     if (payload.meta.signed && payload.response?.account) {
       requestEvent.cookie.set("xaman_jwt", payload.response.account, {
-        path: "/dashboard",
+        path: "dashboard",
         httpOnly: true,
         secure: true,
         sameSite: "lax",

@@ -61,8 +61,8 @@ export const onPost: RequestHandler = async (requestEvent) => {
       options: {
         submit: true, // Auto-submit after signing
         return_url: {
-          app: `${appUrl}/dashboard`,
-          web: `${appUrl}/dashboard`,
+          app: `${appUrl}dashboard`,
+          web: `${appUrl}dashboard`,
         },
         expire: 5, // Expires in 5 minutes
       },

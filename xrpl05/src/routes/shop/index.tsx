@@ -45,7 +45,7 @@ export const useTokenLoader = routeLoader$(async (requestEvent) => {
       count: 0,
       tokens: [] as TokenItem[],
       timestamp: new Date().toISOString(),
-      xrpPriceUsd: 2.3,
+      xrpPriceUsd: 58.9,
     };
   }
 });
@@ -113,8 +113,8 @@ const createXamanPayload = server$(async function (
       options: {
         submit: true,
         return_url: {
-          app: `${appUrl}/shop`,
-          web: `${appUrl}/shop`,
+          app: `${appUrl}/`,
+          web: `${appUrl}/`,
         },
       },
     } as any);

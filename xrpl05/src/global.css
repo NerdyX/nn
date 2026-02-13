@@ -182,6 +182,62 @@
   }
 }
 
+@keyframes globe-spin {
+  from {
+    transform: rotateX(-20deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-20deg) rotateY(360deg);
+  }
+}
+
+@keyframes arc-pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+
+@keyframes arc-travel {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
 /* ─────────────────────────────────────────────
    Base Styles & Reset
    ───────────────────────────────────────────── */
@@ -635,6 +691,126 @@ select:disabled {
 /* ─────────────────────────────────────────────
    Mobile Responsive
    ───────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────
+   Globe Styles
+   ───────────────────────────────────────────── */
+
+.globe-wireframe {
+  transform-style: preserve-3d;
+  animation: globe-spin 20s linear infinite;
+}
+
+.globe-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.globe-ring-highlight {
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.globe-arc-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: arc-pulse 2s ease-out forwards;
+}
+
+.globe-glow {
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(59, 130, 246, 0.12),
+    rgba(59, 130, 246, 0.04) 40%,
+    transparent 70%
+  );
+}
+
+.globe-atmosphere {
+  box-shadow:
+    inset 0 0 40px rgba(59, 130, 246, 0.08),
+    0 0 60px rgba(59, 130, 246, 0.06),
+    0 0 120px rgba(59, 130, 246, 0.03);
+}
+
+/* ─────────────────────────────────────────────
+   Flat Map Ping Styles
+   ───────────────────────────────────────────── */
+
+.map-ping-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: map-ping 2.2s ease-out forwards;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.map-ping-dot::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0.4;
+  animation: map-ping-ring 2.2s ease-out forwards;
+}
+
+.map-ping-dot::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0.15;
+  animation: map-ping-ring 2.2s 0.15s ease-out forwards;
+}
+
+@keyframes map-ping {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  70% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+}
+
+@keyframes map-ping-ring {
+  0% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Ticker & Landing Utilities
+   ───────────────────────────────────────────── */
+
+.ticker-track {
+  animation: ticker-scroll 30s linear infinite;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+.float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
 
 @media (max-width: 768px) {
   h1 {

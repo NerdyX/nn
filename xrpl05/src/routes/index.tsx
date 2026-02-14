@@ -161,7 +161,7 @@ const LedgerModal = component$<{
 }>(({ ledger, xrpPrice, quorum, onClose$ }) => {
   return (
     <div
-      class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      class="fixed inset-0 z-9999 flex items-center justify-center p-4"
       onClick$={() => onClose$()}
     >
       <div class="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fadeIn" />
@@ -441,7 +441,7 @@ const XrpChart = component$<{
   });
 
   return (
-    <div class="reveal-up group relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden p-6 min-h-[480px]">
+    <div class="reveal-up group relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden p-6 min-h-120">
       <div class="flex items-center justify-between mb-6">
         <div>
           <div class="flex items-center gap-2 mb-1">
@@ -488,7 +488,7 @@ const XrpChart = component$<{
           </button>
         </div>
       </div>
-      <div class="h-[360px]">
+      <div class="h-90">
         <canvas ref={canvasRef} class="w-full h-full" />
       </div>
       <div class="flex items-center justify-between mt-4 text-xs text-gray-400">
@@ -1046,19 +1046,19 @@ export default component$(() => {
       <section class="relative min-h-screen flex items-center justify-center overflow-hidden bg-white">
         <div class="absolute inset-0 grid-bg" />
         <div class="absolute inset-0 overflow-hidden pointer-events-none">
-          <div class="animate-float-1 absolute -top-40 -left-40 w-[500px] h-[500px] bg-blue-500/[0.04] rounded-full blur-[100px]" />
-          <div class="animate-float-2 absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-amber-400/[0.04] rounded-full blur-[120px]" />
-          <div class="animate-float-3 absolute top-1/4 right-1/3 w-[300px] h-[300px] bg-blue-400/[0.03] rounded-full blur-[80px]" />
+          <div class="animate-float-1 absolute -top-40 -left-40 w-125 h-125 bg-blue-500/4 rounded-full blur-[100px]" />
+          <div class="animate-float-2 absolute -bottom-40 -right-40 w-150 h-150 bg-amber-400/4 rounded-full blur-[120px]" />
+          <div class="animate-float-3 absolute top-1/4 right-1/3 w-75 h-75 bg-blue-400/3 rounded-full blur-[80px]" />
         </div>
 
         <div class="relative z-10 w-full max-w-6xl mx-auto px-6 lg:px-8 text-center pt-24 pb-16">
           <h1 class="hero-title mb-6">
-            <span class="block font-extralight text-6xl sm:text-7xl lg:text-[8rem] font-black bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent leading-[0.9] tracking-tighter">
+            <span class="block font-extralight text-6xl sm:text-7xl lg:text-[8rem] bg-linear-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent leading-[0.9] tracking-tighter">
               {"{XRPL}"}OS
             </span>
             <span class="block text-2xl sm:text-3xl lg:text-4xl font-light text-gray-500 mt-4 tracking-wide">
               The Pulse of the{" "}
-              <span class="font-semibold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+              <span class="font-semibold bg-linear-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
                 XRP Ecosystem
               </span>
             </span>
@@ -1100,7 +1100,7 @@ export default component$(() => {
             </div>
             <div class="hidden sm:block w-px h-12 bg-gray-200" />
             <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+              <div class="w-12 h-12 rounded-full bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
                 <span class="text-white font-bold text-lg">X</span>
               </div>
               <div class="text-left">
@@ -1170,7 +1170,7 @@ export default component$(() => {
           <div class="text-center mb-10 reveal-section">
             <h2 class="text-4xl sm:text-5xl font-bold text-gray-900 mb-4 tracking-tight">
               Live Network{" "}
-              <span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+              <span class="bg-linear-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
                 Intelligence
               </span>
             </h2>
@@ -1180,7 +1180,7 @@ export default component$(() => {
           </div>
 
           {/* Bloomberg Stats Bar */}
-          <div class="reveal-section bg-gray-900 rounded-2xl px-5 py-3.5 mb-6 shadow-xl border border-gray-800">
+          <div class="reveal-section bg-white rounded-2xl px-5 py-3.5 mb-6 shadow-xl">
             <div class="flex items-center justify-between gap-3 overflow-x-auto">
               {[
                 {
@@ -1192,7 +1192,7 @@ export default component$(() => {
                 {
                   label: "Avg. Txn. Fee",
                   value: `${ledgerStats.avgTxnFee.toFixed(7)}`,
-                  color: "text-white",
+                  color: "text-indigo-400",
                   prefix: true,
                 },
                 null,
@@ -1302,7 +1302,7 @@ export default component$(() => {
                   <button
                     key={`${ledger.ledgerIndex}-${i}`}
                     onClick$={() => openLedgerModal(ledger)}
-                    class="shrink-0 group bg-white hover:bg-blue-50/50 border border-gray-100 hover:border-blue-200 rounded-xl px-4 py-3 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md text-left min-w-[180px]"
+                    class="shrink-0 group bg-white hover:bg-blue-50/50 border border-gray-100 hover:border-blue-200 rounded-xl px-4 py-3 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md text-left min-w-45"
                   >
                     <div class="flex items-center justify-between mb-2">
                       <span class="text-xs font-bold text-gray-900 tabular-nums group-hover:text-blue-600 transition-colors">
@@ -1341,7 +1341,7 @@ export default component$(() => {
       </section>
 
       {/* ═══ DEX CHART ═══ */}
-      <section class="py-20 px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50/50">
+      <section class="py-20 px-6 lg:px-8 bg-linear-to-b from-white to-gray-50/50">
         <div class="max-w-7xl mx-auto reveal-section">
           <XrpChart
             points={chartData.points}
@@ -1462,7 +1462,7 @@ export default component$(() => {
               style={{ aspectRatio: "1/1" }}
             >
               <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow">
+                <div class="w-8 h-8 rounded-xl bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow">
                   <span class="text-white font-bold text-sm">X</span>
                 </div>
                 <div>
@@ -1535,12 +1535,12 @@ export default component$(() => {
       </section>
 
       {/* ═══ GLOBE / LIVE TX STREAM ═══ */}
-      <section class="py-20 px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50/50">
+      <section class="py-20 px-6 lg:px-8 bg-linear-to-b from-white to-gray-50/50">
         <div class="max-w-7xl mx-auto">
           <div class="text-center mb-12 reveal-section">
             <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
               Live Transaction{" "}
-              <span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+              <span class="bg-linear-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
                 Stream
               </span>
             </h2>
@@ -1549,12 +1549,12 @@ export default component$(() => {
             </p>
           </div>
 
-          <div class="reveal-section relative rounded-3xl overflow-hidden bg-[#080816] shadow-2xl min-h-[560px]">
+          <div class="reveal-section relative rounded-3xl overflow-hidden bg-[#080816] shadow-2xl min-h-140">
             <div class="flex items-center justify-center py-12 relative">
               <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div class="w-[400px] h-[400px] bg-blue-500/[0.08] rounded-full blur-[80px]" />
+                <div class="w-100 h-100 bg-blue-500/8 rounded-full blur-[80px]" />
               </div>
-              <div class="relative z-10 w-[360px] h-[360px]">
+              <div class="relative z-10 w-90 h-90">
                 <div
                   class="animate-globe-spin w-full h-full rounded-full relative"
                   style={{
@@ -1569,7 +1569,7 @@ export default component$(() => {
                   {[0, 30, 60, 90, 120, 150].map((deg) => (
                     <div
                       key={`lng-${deg}`}
-                      class="absolute inset-0 rounded-full border border-blue-500/[0.08]"
+                      class="absolute inset-0 rounded-full border border-blue-500/8"
                       style={{ transform: `rotateY(${deg}deg)` }}
                     />
                   ))}
@@ -1682,7 +1682,7 @@ export default component$(() => {
             </div>
 
             <div class="absolute bottom-0 left-0 right-0 z-20">
-              <div class="mx-4 mb-4 rounded-2xl overflow-hidden bg-white/[0.06] backdrop-blur-[20px] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+              <div class="mx-4 mb-4 rounded-2xl overflow-hidden bg-white/6 backdrop-blur-[20px] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
                 <div class="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <span class="text-xs font-semibold text-white/80">
@@ -1781,7 +1781,7 @@ export default component$(() => {
           <div class="text-center mb-16 reveal-section">
             <h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 tracking-tight">
               Two Networks.
-              <span class="bg-gradient-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent">
+              <span class="bg-linear-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent">
                 {" "}
                 One Platform.
               </span>
@@ -1831,7 +1831,7 @@ export default component$(() => {
                 bar: "from-amber-500 to-orange-500",
                 hoverText: "hover:text-amber-600",
                 icon: (
-                  <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+                  <div class="w-12 h-12 rounded-2xl bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
                     <span class="text-white font-bold text-xl">X</span>
                   </div>
                 ),
@@ -1850,7 +1850,7 @@ export default component$(() => {
             ].map((net) => (
               <div
                 key={net.name}
-                class={`stagger-card tilt-card group relative bg-white rounded-3xl p-8 lg:p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-500 overflow-hidden bg-gradient-to-br ${net.gradient} ${net.hoverGradient}`}
+                class={`stagger-card tilt-card group relative bg-white rounded-3xl p-8 lg:p-10 border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-500 overflow-hidden bg-linear-to-br ${net.gradient} ${net.hoverGradient}`}
               >
                 <div class="relative z-10">
                   <div class="flex items-center gap-3 mb-6">
@@ -1881,7 +1881,7 @@ export default component$(() => {
                   </div>
                 </div>
                 <div
-                  class={`absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r ${net.bar} scale-x-0 group-hover:scale-x-100 transition-transform duration-700 origin-left`}
+                  class={`absolute bottom-0 left-0 w-full h-1 bg-linear-to-r ${net.bar} scale-x-0 group-hover:scale-x-100 transition-transform duration-700 origin-left`}
                 />
               </div>
             ))}
@@ -1890,12 +1890,12 @@ export default component$(() => {
       </section>
 
       {/* ═══ WALLET INTEGRATIONS ═══ */}
-      <section class="py-24 px-6 lg:px-8 bg-gradient-to-b from-gray-50/50 to-white">
+      <section class="py-24 px-6 lg:px-8 bg-linear-to-b from-gray-50/50 to-white">
         <div class="max-w-7xl mx-auto">
           <div class="text-center mb-16 reveal-section">
             <h2 class="text-4xl sm:text-5xl font-bold text-gray-900 tracking-tight">
               Connect Your{" "}
-              <span class="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+              <span class="bg-linear-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
                 Wallet
               </span>
             </h2>
@@ -1942,7 +1942,7 @@ export default component$(() => {
                 class="stagger-card tilt-card group flex flex-col items-center gap-3 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 cursor-pointer"
               >
                 <div
-                  class={`w-14 h-14 rounded-2xl bg-gradient-to-br ${wallet.color} flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition-transform duration-300`}
+                  class={`w-14 h-14 rounded-2xl bg-linear-to-br ${wallet.color} flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition-transform duration-300`}
                 >
                   {wallet.icon}
                 </div>
@@ -1964,7 +1964,7 @@ export default component$(() => {
           <div class="text-center mb-16 reveal-section">
             <h2 class="text-4xl sm:text-5xl font-bold text-gray-900 tracking-tight">
               Built for{" "}
-              <span class="bg-gradient-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent">
+              <span class="bg-linear-to-r from-blue-600 to-amber-500 bg-clip-text text-transparent">
                 Everything
               </span>
             </h2>
@@ -2040,9 +2040,9 @@ export default component$(() => {
       </section>
 
       {/* ═══ PHILOSOPHY / CTA ═══ */}
-      <section class="py-24 px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50/50">
+      <section class="py-24 px-6 lg:px-8 bg-linear-to-b from-white to-gray-50/50">
         <div class="max-w-4xl mx-auto reveal-section">
-          <div class="relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-10 lg:p-14 overflow-hidden shadow-2xl">
+          <div class="relative bg-linear-to-br from-gray-900 to-gray-800 rounded-3xl p-10 lg:p-14 overflow-hidden shadow-2xl">
             <div class="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
             <div class="absolute bottom-0 left-0 w-60 h-60 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
             <div class="relative z-10">
@@ -2089,7 +2089,7 @@ export default component$(() => {
               <div class="mb-4">
                 <a
                   href="/"
-                  class="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
+                  class="text-2xl font-bold bg-linear-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
                 >
                   {"{XRPL}"}OS
                 </a>

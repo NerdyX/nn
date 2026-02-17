@@ -749,7 +749,7 @@ export default component$(() => {
                                         ).toLocaleString()}
                                       </td>
                                       <td
-                                        class="px-4 py-3 font-mono text-xs text-gray-500 max-w-[180px] truncate"
+                                        class="px-4 py-3 font-mono text-xs text-gray-500 max-w-45 truncate"
                                         title={line.account}
                                       >
                                         {line.account

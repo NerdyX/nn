@@ -748,7 +748,9 @@ export default component$(() => {
                 <div class="header">Account Information</div>
                 <div class="body">
                   {!account.value ? (
-                    <div>Loading...</div>
+                    <div class="flex items-center justify-center py-10">
+                      <div class="spinner" />
+                    </div>
                   ) : (
                     <div>
                       {account.value.urlgravatar && (
@@ -829,6 +831,143 @@ export default component$(() => {
                         </div>
                       )}
 
+                      {account.value.EmailHash && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            EMAIL HASH
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.875rem",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {account.value.EmailHash}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          FLAGS
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {account.value.Flags}
+                        </span>
+                      </div>
+
+                      {account.value.LedgerEntryType && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            LEDGER ENTRY TYPE
+                          </strong>
+                          <span style={{ fontSize: "0.875rem" }}>
+                            {account.value.LedgerEntryType}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          OWNER COUNT
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {account.value.OwnerCount}
+                        </span>
+                      </div>
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          PREVIOUS TXN ID
+                        </strong>
+                        <span
+                          style={{
+                            fontSize: "0.8125rem",
+                            wordBreak: "break-all",
+                            display: "block",
+                            fontFamily: "monospace",
+                          }}
+                        >
+                          {truncate(account.value.PreviousTxnID)}
+                        </span>
+                      </div>
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          PREVIOUS TXN LEDGER SEQ
+                        </strong>
+                        <span style={{ fontSize: "0.875rem" }}>
+                          {account.value.PreviousTxnLgrSeq}
+                        </span>
+                      </div>
+
+                      {account.value.RegularKey && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            REGULAR KEY
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.8125rem",
+                              wordBreak: "break-all",
+                              display: "block",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {account.value.RegularKey}
+                          </span>
+                        </div>
+                      )}
+
                       <div style={{ marginBottom: "0.75rem" }}>
                         <strong
                           style={{
@@ -844,6 +983,31 @@ export default component$(() => {
                           {account.value.Sequence}
                         </span>
                       </div>
+
+                      {account.value.index && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <strong
+                            style={{
+                              color: "#6b7280",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            INDEX
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.8125rem",
+                              wordBreak: "break-all",
+                              display: "block",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {truncate(account.value.index)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -852,18 +1016,28 @@ export default component$(() => {
               {/* Tokens & Trustlines */}
               <div class="card square-card">
                 <div class="header">
-                  {lines.value.length} TOKENS{" "}
-                  {wallet.connected.value && (
-                    <a
-                      href="#"
-                      style={{ color: "#3b82f6", fontSize: "0.75rem" }}
-                    >
-                      [SIGN IN]
-                    </a>
+                  {!account.value ? (
+                    "TOKENS"
+                  ) : (
+                    <>
+                      {lines.value.length} TOKENS{" "}
+                      {wallet.connected.value && (
+                        <a
+                          href="#"
+                          style={{ color: "#3b82f6", fontSize: "0.75rem" }}
+                        >
+                          [SIGN IN]
+                        </a>
+                      )}
+                    </>
                   )}
                 </div>
                 <div class="body">
-                  {lines.value.length === 0 ? (
+                  {!account.value ? (
+                    <div class="flex items-center justify-center py-10">
+                      <div class="spinner" />
+                    </div>
+                  ) : lines.value.length === 0 ? (
                     <div>No tokens or trustlines</div>
                   ) : (
                     lines.value.map((l, i) => (
@@ -897,13 +1071,34 @@ export default component$(() => {
             {/* Transaction History - full width */}
             <div class="card txs" style={{ gridColumn: "1 / -1" }}>
               <div class="header">
-                LAST {txs.value.length} TRANSACTIONS{" "}
-                <a href="#" style={{ color: "#3b82f6", fontSize: "0.75rem" }}>
-                  [VIEW ALL]
-                </a>
+                {!account.value ? (
+                  "TRANSACTIONS"
+                ) : (
+                  <>
+                    LAST {txs.value.length} TRANSACTIONS{" "}
+                    <a
+                      href="#"
+                      style={{ color: "#3b82f6", fontSize: "0.75rem" }}
+                    >
+                      [VIEW ALL]
+                    </a>
+                  </>
+                )}
               </div>
               <div class="body">
-                {txs.value.length === 0 ? (
+                {!account.value ? (
+                  <div
+                    style={{
+                      padding: "1.5rem",
+                      textAlign: "center",
+                      color: "#6b7280",
+                    }}
+                  >
+                    <div class="flex items-center justify-center py-10">
+                      <div class="spinner" />
+                    </div>
+                  </div>
+                ) : txs.value.length === 0 ? (
                   <div
                     style={{
                       padding: "1.5rem",

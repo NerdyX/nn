@@ -31,7 +31,7 @@ import type {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const NFT_PAGE_SIZE = 32; // 4 columns × 8 rows
 const TOK_PAGE_SIZE = 50;
-const TOKEN_REFRESH_MS = 3_000; // live token poll every 15 s
+const TOKEN_REFRESH_MS = 10000; // live token poll every 15 s
 
 const IPFS_GATEWAYS = [
   "https://cloudflare-ipfs.com/ipfs/",

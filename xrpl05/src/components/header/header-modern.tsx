@@ -1,10 +1,12 @@
+// src/compoents/header.header-modern.tsx
+
 import { component$, useSignal, $ } from "@builder.io/qwik";
 import { useLocation, useNavigate } from "@builder.io/qwik-city";
 import {
   WalletContext,
   truncateAddress,
   clearWalletSession,
-  persistWalletSession,
+  persistWalletSession, // FIX #4: single source of truth — no longer re-imported inside connectGutteWallet
 } from "~/context/wallet-context";
 import { useContext } from "@builder.io/qwik";
 
@@ -28,7 +30,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
 
   const navItems = [
     { label: "Explorer", href: "/search" },
-    { label: "Marketplace", href: "/shop" },
+    { label: "Marketplace", href: "/ss" },
   ];
 
   // ── Xaman Connection ──
@@ -163,15 +165,37 @@ export const HeaderModern = component$<HeaderProps>(() => {
     }
   });
 
+  // ── Gutte Connection ──
+  // FIX #3 & #4: Simplified handler — delegates ALL context hydration,
+  // session persistence, and event binding to connectGutteAndBind.
+  // No more shadowed persistWalletSession import.
+  const connectGutteWallet = $(async () => {
+    walletLoading.value = "gutte";
+    walletError.value = "";
+    try {
+      const { connectGutteAndBind } = await import("../wallets/gutte");
+
+      await connectGutteAndBind(walletCtx, () => {
+        showWalletModal.value = false;
+      });
+
+      showWalletModal.value = false;
+      walletLoading.value = null;
+    } catch (e) {
+      console.error("Gutte connection failed", e);
+      walletError.value = e instanceof Error ? e.message : "Connection failed";
+      walletLoading.value = null;
+    }
+  });
+
   // ── GemWallet Connection ──
   const connectGem = $(async () => {
     walletLoading.value = "gem";
     walletError.value = "";
 
     try {
-      const { isGemWalletAvailable, connectGemWallet } = await import(
-        "../wallets/gem"
-      );
+      const { isGemWalletAvailable, connectGemWallet } =
+        await import("../wallets/gem");
 
       if (!isGemWalletAvailable()) {
         throw new Error(
@@ -489,7 +513,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
         <>
           {/* Backdrop */}
           <div
-            class="fixed inset-0 z-[9998]"
+            class="fixed inset-0 z-9998"
             style={{
               background: "rgba(0,0,0,0.4)",
               backdropFilter: "blur(6px)",
@@ -501,9 +525,9 @@ export const HeaderModern = component$<HeaderProps>(() => {
               walletLoading.value = null;
             }}
           />
-          {/* Modal — centered with max-height constraint */}
+          {/* Modal */}
           <div
-            class="fixed z-[9999] overflow-y-auto"
+            class="fixed z-9999 overflow-y-auto"
             style={{
               top: "50%",
               left: "50%",
@@ -588,7 +612,12 @@ export const HeaderModern = component$<HeaderProps>(() => {
               </div>
             )}
 
-            {/* Wallet Options */}
+            {/* ══════════════════════════════════════════════════
+                FIX #1: ALL four wallet buttons are now inside
+                the SAME flex-column <div>.  Previously the
+                closing </div> came right after Gutte, orphaning
+                the GemWallet button outside the column.
+               ══════════════════════════════════════════════════ */}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "10px" }}
             >
@@ -627,7 +656,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                     flexShrink: "0",
                   }}
                 >
-                  🔐
+                  <img src="/public/icons/xaman.png" alt="Xahau Logo" />
                 </div>
                 <div style={{ textAlign: "left", flex: "1" }}>
                   <div
@@ -693,7 +722,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                     flexShrink: "0",
                   }}
                 >
-                  ✓
+                  <img src="/public/icons/xaman.png" alt="Xahau Logo" />
                 </div>
                 <div style={{ textAlign: "left", flex: "1" }}>
                   <div
@@ -724,7 +753,74 @@ export const HeaderModern = component$<HeaderProps>(() => {
                 )}
               </button>
 
-              {/* GemWallet */}
+              {/* Gutte Wallet */}
+              <button
+                onClick$={connectGutteWallet}
+                disabled={walletLoading.value !== null}
+                class="cursor-pointer"
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "14px 16px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  background: "rgba(255,255,255,0.8)",
+                  transition: "all 0.2s",
+                  // FIX #2: was "gem", now correctly "gutte"
+                  opacity:
+                    walletLoading.value !== null &&
+                    walletLoading.value !== "gutte"
+                      ? "0.5"
+                      : "1",
+                }}
+              >
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, #d1fae5, #a7f3d0)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                    flexShrink: "0",
+                  }}
+                >
+                  <img src="/public/icons/xaman.png" alt="Xahau Logo" />
+                </div>
+                <div style={{ textAlign: "left", flex: "1" }}>
+                  <div
+                    style={{
+                      fontWeight: "600",
+                      fontSize: "14px",
+                      color: "#111827",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    Gutte Wallet
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                    Browser extension
+                  </div>
+                </div>
+                {walletLoading.value === "gutte" && (
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      border: "2px solid #10b981",
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "spin 0.8s linear infinite",
+                    }}
+                  />
+                )}
+              </button>
+
+              {/* GemWallet — FIX #1: now INSIDE the flex column */}
               <button
                 onClick$={connectGem}
                 disabled={walletLoading.value !== null}
@@ -759,7 +855,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                     flexShrink: "0",
                   }}
                 >
-                  💎
+                  <img src="/public/icons/xaman.png" alt="Xahau Logo" />
                 </div>
                 <div style={{ textAlign: "left", flex: "1" }}>
                   <div
@@ -790,6 +886,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                 )}
               </button>
             </div>
+            {/* ── END of wallet options flex column ── */}
 
             <style
               dangerouslySetInnerHTML={`
@@ -821,7 +918,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
       {showQrModal.value && qrImage.value && (
         <>
           <div
-            class="fixed inset-0 z-[10000]"
+            class="fixed inset-0 z-10000"
             style={{
               background: "rgba(0,0,0,0.5)",
               backdropFilter: "blur(6px)",
@@ -830,7 +927,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
             onClick$={() => (showQrModal.value = false)}
           />
           <div
-            class="fixed z-[10001]"
+            class="fixed z-10001"
             style={{
               top: "50%",
               left: "50%",

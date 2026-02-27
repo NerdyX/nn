@@ -11,7 +11,7 @@ import type { NFTokenCreateOffer } from "~/lib/network/xrpl/types/nftTx";
 import type { XahauNFTokenCreateOffer } from "~/lib/network/xahau/types/nftTx";
 import { getXRPLClient } from "~/lib/store/network/xrpl";
 import { getXahauClient } from "~/lib/store/network/xahau";
-import type { NetworkType } from "./nft-offers";
+import type { NetworkType } from "../nft-offers";
 
 /**
  * Request parameters for creating an NFT buy offer

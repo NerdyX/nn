@@ -10,13 +10,14 @@ export const onGet: RequestHandler = async ({ url, json, env }) => {
   const network = url.searchParams.get("network") || "xrpl";
   const address = url.searchParams.get("address");
   const limit = parseInt(url.searchParams.get("limit") || "100", 10);
+  const marker = url.searchParams.get("marker");
 
   if (!address) {
     json(400, { error: "Address is required" });
     return;
   }
 
-  const cacheKey = `nfts:${network}:${address}:${limit}`;
+  const cacheKey = `nfts:${network}:${address}:${limit}${marker ? `:${marker}` : ""}`;
   // Use D1 binding if available from env
   const db = env.get("DB") as any | null;
 
@@ -26,37 +27,42 @@ export const onGet: RequestHandler = async ({ url, json, env }) => {
       cacheKey,
       async () => {
         const rpcUrl = network === "xahau" ? XAHAU_RPC : XRPL_RPC;
-        const payload = {
+        const payload: any = {
           method: "account_nfts",
-          params: [{ account: address, limit }]
+          params: [{ account: address, limit }],
         };
+
+        if (marker) {
+          payload.params[0].marker = marker;
+        }
 
         const res = await fetch(rpcUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
 
         const data: any = await res.json();
-        
+
         if (data.result?.error) {
           throw new Error(data.result.error_message || data.result.error);
         }
 
         const nfts = data.result?.account_nfts || [];
+        const nextMarker = data.result?.marker;
 
         // Enhance with resolved URIs
         const enhancedNfts = nfts.map((nft: any) => {
           let resolvedUri = "";
           let name = "Unknown NFT";
-          
+
           if (nft.URI) {
             try {
-               const decoded = fromHex(nft.URI);
-               resolvedUri = resolveIpfsUrl(decoded);
-               name = decoded; // basic fallback
+              const decoded = fromHex(nft.URI);
+              resolvedUri = resolveIpfsUrl(decoded);
+              name = decoded; // basic fallback
             } catch {
-               resolvedUri = resolveIpfsUrl(nft.URI);
+              resolvedUri = resolveIpfsUrl(nft.URI);
             }
           }
 
@@ -75,7 +81,7 @@ export const onGet: RequestHandler = async ({ url, json, env }) => {
             flags: nft.Flags,
             transferFee: nft.TransferFee,
             sellOffers: [],
-            buyOffers: []
+            buyOffers: [],
           };
         });
 
@@ -85,10 +91,11 @@ export const onGet: RequestHandler = async ({ url, json, env }) => {
           address,
           totalNfts: enhancedNfts.length,
           nfts: enhancedNfts,
-          queriedAt: new Date().toISOString()
+          marker: nextMarker,
+          queriedAt: new Date().toISOString(),
         };
       },
-      5 * 60_000 // 5 minutes cache
+      5 * 60_000, // 5 minutes cache
     );
 
     json(200, result.data);

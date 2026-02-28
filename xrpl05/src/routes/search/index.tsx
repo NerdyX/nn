@@ -54,6 +54,7 @@ interface MarketplaceData {
   totalSellOffers: number;
   totalBuyOffers: number;
   nfts: NftItem[];
+  marker?: string;
   queriedAt: string;
 }
 
@@ -497,7 +498,7 @@ export default component$(() => {
   // Search state
   const query = useSignal("");
   const debounced = useSignal("");
-  const network = useSignal<"xrpl" | "xahau">("xrpl");
+  
 
   // Account data
   const account = useSignal<AccountRoot | null>(null);
@@ -513,8 +514,8 @@ export default component$(() => {
   // Search / filter state
   const searchQuery = useSignal("");
   const selectedCollection = useSignal<string | null>(null);
-  const currentPage = useSignal(1);
-  const pageSize = 24;
+  
+  
 
   // NFT Tab state
   const nftTab = useSignal<
@@ -523,6 +524,36 @@ export default component$(() => {
 
   // Modal state
   const selectedNft = useSignal<NftItem | null>(null);
+  const nftHistory = useSignal<any[]>([]);
+  const loadingHistory = useSignal(false);
+  
+  useTask$(({ track }) => {
+    const nft = track(() => selectedNft.value);
+    if (!nft) return;
+    
+    nftHistory.value = [];
+    loadingHistory.value = true;
+    
+    const ws = new WebSocket(networkCtx.activeNetwork.value === "xrpl" ? XRPL_WS : XAHAU_WS);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        command: "nft_history",
+        nft_id: nft.nftokenId,
+        limit: 20
+      }));
+    };
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.result?.transactions) {
+        nftHistory.value = data.result.transactions;
+      }
+      loadingHistory.value = false;
+      ws.close();
+    };
+    ws.onerror = () => {
+      loadingHistory.value = false;
+    };
+  });
   const showOfferModal = useSignal(false);
   const offerAmount = useSignal("");
 
@@ -534,14 +565,21 @@ export default component$(() => {
   });
 
   // ── Fetch NFTs from API ──
-  const fetchNfts = $(async (address: string) => {
+  const loadingMore = useSignal(false);
+
+  const fetchNfts = $(async (address: string, loadMore = false) => {
     if (!address) return;
-    loading.value = true;
-    errorMsg.value = "";
+    if (loadMore) {
+      loadingMore.value = true;
+    } else {
+      loading.value = true;
+      errorMsg.value = "";
+    }
 
     try {
+      const markerParam = loadMore && marketData.value?.marker ? `&marker=${marketData.value.marker}` : '';
       const res = await fetch(
-        `/api/marketplace?network=${networkCtx.activeNetwork.value}&address=${address}&limit=100`,
+        `/api/marketplace?network=${networkCtx.activeNetwork.value}&address=${address}&limit=5${markerParam}`,
       );
 
       if (!res.ok) {
@@ -552,15 +590,22 @@ export default component$(() => {
       }
 
       const data: MarketplaceData = await res.json();
-      marketData.value = data;
-      nfts.value = data.nfts;
-      currentPage.value = 1;
+      if (loadMore) {
+        marketData.value = { ...marketData.value, marker: data.marker } as any;
+        nfts.value = [...nfts.value, ...data.nfts];
+      } else {
+        marketData.value = data;
+        nfts.value = data.nfts;
+      }
     } catch (err: any) {
-      errorMsg.value = err.message || "Failed to fetch NFT data";
-      nfts.value = [];
-      marketData.value = null;
+      if (!loadMore) {
+        errorMsg.value = err.message || "Failed to fetch NFT data";
+        nfts.value = [];
+        marketData.value = null;
+      }
     } finally {
       loading.value = false;
+      loadingMore.value = false;
     }
   });
 
@@ -581,7 +626,7 @@ export default component$(() => {
     fetchNfts(addr);
 
     // Fetch account info via WebSocket
-    const ws = new WebSocket(network.value === "xrpl" ? XRPL_WS : XAHAU_WS);
+    const ws = new WebSocket(networkCtx.activeNetwork.value === "xrpl" ? XRPL_WS : XAHAU_WS);
     let id = 1;
 
     ws.onopen = () => {
@@ -660,13 +705,10 @@ export default component$(() => {
 
   // Pagination
   const paginated = useComputed$(() => {
-    const start = (currentPage.value - 1) * pageSize;
-    return filtered.value.slice(start, start + pageSize);
+    return filtered.value;
   });
 
-  const totalPages = useComputed$(() =>
-    Math.ceil(filtered.value.length / pageSize),
-  );
+  
 
   return (
     <div class="page mt-16">
@@ -689,12 +731,12 @@ export default component$(() => {
           />
           <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
             <select
-              value={network.value}
+              value={networkCtx.activeNetwork.value}
               onChange$={(e) => {
                 const net = (e.target as HTMLSelectElement).value as
                   | "xrpl"
                   | "xahau";
-                network.value = net;
+                networkCtx.activeNetwork.value = net;
                 import("~/lib/store/network").then(({ networkActions }) => {
                   networkActions.setActiveNetwork(net);
                 });
@@ -745,7 +787,7 @@ export default component$(() => {
                   </h2>
                   <div class="flex items-center gap-2 mt-1">
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {network.value.toUpperCase()}
+                      {networkCtx.activeNetwork.value.toUpperCase()}
                     </span>
                     {account.value.Domain && (
                       <a
@@ -783,7 +825,7 @@ export default component$(() => {
                       { maximumFractionDigits: 2 },
                     )}
                     <span class="text-base font-medium text-gray-500 ml-1">
-                      {network.value === "xrpl" ? "XRP" : "XAH"}
+                      {networkCtx.activeNetwork.value === "xrpl" ? "XRP" : "XAH"}
                     </span>
                   </p>
                 </div>
@@ -905,7 +947,7 @@ export default component$(() => {
                                   : "+"}
                                 {formatAmount(
                                   t.Amount,
-                                  network.value === "xrpl" ? "XRP" : "XAH",
+                                  networkCtx.activeNetwork.value === "xrpl" ? "XRP" : "XAH",
                                 )}
                               </span>
                             )}
@@ -930,7 +972,7 @@ export default component$(() => {
                           <td class="text-right">
                             <a
                               href={
-                                network.value === "xrpl"
+                                networkCtx.activeNetwork.value === "xrpl"
                                   ? `https://livenet.xrpl.org/transactions/${t.hash}`
                                   : `https://explorer.xahau.network/tx/${t.hash}`
                               }
@@ -986,7 +1028,7 @@ export default component$(() => {
                         searchQuery.value = (
                           e.target as HTMLInputElement
                         ).value;
-                        currentPage.value = 1;
+                        
                       }}
                       class="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
                     />
@@ -1025,7 +1067,7 @@ export default component$(() => {
                   )}
                   onClick$={() => {
                     nftTab.value = "owned";
-                    currentPage.value = 1;
+                    
                   }}
                 >
                   Owned ({marketData.value?.totalNfts || 0})
@@ -1037,7 +1079,7 @@ export default component$(() => {
                   ].join(" ")}
                   onClick$={() => {
                     nftTab.value = "offers-created";
-                    currentPage.value = 1;
+                    
                   }}
                 >
                   Listed ({marketData.value?.listedCount || 0})
@@ -1049,7 +1091,7 @@ export default component$(() => {
                   ].join(" ")}
                   onClick$={() => {
                     nftTab.value = "offers-received";
-                    currentPage.value = 1;
+                    
                   }}
                 >
                   Offers Received
@@ -1060,7 +1102,7 @@ export default component$(() => {
                   )}
                   onClick$={() => {
                     nftTab.value = "sold";
-                    currentPage.value = 1;
+                    
                   }}
                 >
                   Activity
@@ -1091,8 +1133,7 @@ export default component$(() => {
                             <img
                               src={nft.image || FALLBACK_IMG}
                               alt={nft.name}
-                              width={400}
-                              height={400}
+                              width={128} height={128}
                               loading="lazy"
                               onError$={(e) => {
                                 (e.target as HTMLImageElement).src =
@@ -1106,7 +1147,7 @@ export default component$(() => {
                                   Listed:{" "}
                                   {formatAmount(
                                     nft.sellOffers[0].amount,
-                                    network.value === "xrpl" ? "XRP" : "XAH",
+                                    networkCtx.activeNetwork.value === "xrpl" ? "XRP" : "XAH",
                                   )}
                                 </span>
                               )}
@@ -1115,7 +1156,7 @@ export default component$(() => {
                                   Top Offer:{" "}
                                   {formatAmount(
                                     nft.buyOffers[0].amount,
-                                    network.value === "xrpl" ? "XRP" : "XAH",
+                                    networkCtx.activeNetwork.value === "xrpl" ? "XRP" : "XAH",
                                   )}
                                 </span>
                               )}
@@ -1147,28 +1188,17 @@ export default component$(() => {
                       ))}
                     </div>
 
-                    {/* Pagination Controls */}
-                    {totalPages.value > 1 && (
-                      <div class="mt-8 flex justify-center items-center gap-4">
-                        <button
-                          class="px-4 py-2 border rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-gray-50"
-                          disabled={currentPage.value === 1}
-                          onClick$={() => currentPage.value--}
-                        >
-                          Previous
-                        </button>
-                        <span class="text-sm text-gray-600 font-medium">
-                          Page {currentPage.value} of {totalPages.value}
-                        </span>
-                        <button
-                          class="px-4 py-2 border rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-gray-50"
-                          disabled={currentPage.value === totalPages.value}
-                          onClick$={() => currentPage.value++}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
+                    {marketData.value?.marker && (
+    <div class="mt-8 flex justify-center items-center">
+      <button
+        class="px-6 py-2 bg-blue-50 text-blue-600 font-medium rounded-full hover:bg-blue-100 transition-colors disabled:opacity-50"
+        disabled={loadingMore.value}
+        onClick$={() => account.value && fetchNfts(account.value.Account, true)}
+      >
+        {loadingMore.value ? "Loading..." : "Load More"}
+      </button>
+    </div>
+  )}
                   </>
                 ) : (
                   <div class="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
@@ -1247,6 +1277,7 @@ export default component$(() => {
                   {/* Right side: Details */}
                   <div class="w-full md:w-1/2 flex flex-col h-full max-h-[50vh] md:max-h-[90vh]">
                     <div class="p-6 md:p-8 flex-1 overflow-y-auto">
+                      
                       <div class="text-sm font-bold text-blue-600 mb-2 uppercase tracking-wide">
                         {selectedNft.value.collection}
                       </div>
@@ -1318,7 +1349,7 @@ export default component$(() => {
                                   <p class="text-2xl font-bold text-blue-600">
                                     {formatAmount(
                                       offer.amount,
-                                      network.value === "xrpl" ? "XRP" : "XAH",
+                                      networkCtx.activeNetwork.value === "xrpl" ? "XRP" : "XAH",
                                     )}
                                   </p>
                                   <p class="text-xs text-gray-500 mt-1">
@@ -1374,9 +1405,38 @@ export default component$(() => {
                           </button>
                         </div>
                       </div>
+                    
+                      
+                      <div class="mt-8">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Transaction History</h3>
+                        {loadingHistory.value ? (
+                          <div class="flex justify-center py-8">
+                            <div class="w-6 h-6 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                          </div>
+                        ) : nftHistory.value.length === 0 ? (
+                          <p class="text-sm text-gray-500 text-center py-4">No history found</p>
+                        ) : (
+                          <div class="space-y-3">
+                            {nftHistory.value.map((tx: any) => (
+                              <div key={tx.tx?.hash || tx.hash} class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                <div>
+                                  <span class="text-xs font-bold uppercase text-gray-500">{tx.tx?.TransactionType || 'Unknown'}</span>
+                                  <p class="text-sm text-gray-900 font-mono mt-0.5">{truncate(tx.tx?.Account || tx.Account)}</p>
+                                </div>
+                                <div class="text-right">
+                                  {tx.tx?.Amount && (
+                                    <p class="text-sm font-bold text-blue-600">
+                                      {formatAmount(tx.tx.Amount, networkCtx.activeNetwork.value === "xrpl" ? "XRP" : "XAH")}
+                                    </p>
+                                  )}
+                                  <p class="text-xs text-gray-400 mt-0.5">Lgr {tx.tx?.ledger_index || tx.ledger_index}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-
-                    {/* Action Footer */}
                     <div class="p-6 border-t bg-gray-50 rounded-br-2xl flex gap-3">
                       {walletCtx.connected.value && (
                         <button
@@ -1425,7 +1485,7 @@ export default component$(() => {
                           placeholder="0.00"
                         />
                         <div class="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">
-                          {network.value === "xrpl" ? "XRP" : "XAH"}
+                          {networkCtx.activeNetwork.value === "xrpl" ? "XRP" : "XAH"}
                         </div>
                       </div>
 

@@ -2,210 +2,38 @@ import {
   component$,
   useSignal,
   useVisibleTask$,
+  useTask$,
   $,
-  Slot,
 } from "@builder.io/qwik";
 import { DocumentHead, Link } from "@builder.io/qwik-city";
 import { LuHeart, LuChevronLeft, LuChevronRight } from "@qwikest/icons/lucide";
+import { useNetworkContext } from "~/context/network-context";
+import { useWalletContext } from "~/context/wallet-context";
+import type { NftItem } from "~/lib/marketplace-data";
+import { networkActions } from "~/lib/store/network";
 
-interface NFT {
-  id: number;
-  image: string;
-  title: string;
-  creator: string;
-  price: number;
-  likes: number;
-}
+const FALLBACK_IMG = "https://placehold.co/400x400/eeeeee/999999?text=NFT";
 
-interface Collection {
-  id: number;
-  image: string;
-  name: string;
-  floorPrice: number;
-  volume: number;
-  items: number;
-}
-
-// Hero / Featured slides
-const featuredSlides: NFT[] = [
-  {
-    id: 1,
-    image: "https://source.unsplash.com/random/1600x900?sig=feat1&nft",
-    title: "Dreamscape #001",
-    creator: "ArtistAlpha",
-    price: 12.5,
-    likes: 340,
-  },
-  {
-    id: 2,
-    image: "https://source.unsplash.com/random/1600x900?sig=feat2&digital+art",
-    title: "Neon Genesis",
-    creator: "CyberMuse",
-    price: 8.8,
-    likes: 212,
-  },
-  {
-    id: 3,
-    image: "https://source.unsplash.com/random/1600x900?sig=feat3&abstract",
-    title: "Void Walker",
-    creator: "GalacticInk",
-    price: 22.0,
-    likes: 587,
-  },
-  {
-    id: 4,
-    image: "https://source.unsplash.com/random/1600x900?sig=feat4&cyberpunk",
-    title: "Pixel Deity",
-    creator: "DesignerEpsilon",
-    price: 5.0,
-    likes: 160,
-  },
-];
-
-// Top Sellers
-const topSellers: NFT[] = [
-  {
-    id: 1,
-    image: "https://source.unsplash.com/random/300x300?sig=ts1&art",
-    title: "Dreamscape",
-    creator: "ArtistAlpha",
-    price: 2.5,
-    likes: 340,
-  },
-  {
-    id: 2,
-    image: "https://source.unsplash.com/random/300x300?sig=ts2&music",
-    title: "CryptoBeat",
-    creator: "MusicianBeta",
-    price: 1.8,
-    likes: 212,
-  },
-  {
-    id: 3,
-    image: "https://source.unsplash.com/random/300x300?sig=ts3&pixel",
-    title: "Pixel Pals",
-    creator: "CreatorGamma",
-    price: 0.75,
-    likes: 140,
-  },
-  {
-    id: 4,
-    image: "https://source.unsplash.com/random/300x300?sig=ts4&rare",
-    title: "RareVibes",
-    creator: "ArtistDelta",
-    price: 3.2,
-    likes: 450,
-  },
-  {
-    id: 5,
-    image: "https://source.unsplash.com/random/300x300?sig=ts5&meta",
-    title: "MetaMask",
-    creator: "DesignerEpsilon",
-    price: 5.0,
-    likes: 600,
-  },
-  {
-    id: 6,
-    image: "https://source.unsplash.com/random/300x300?sig=ts6&neon",
-    title: "Neon Night",
-    creator: "ArtistZeta",
-    price: 1.2,
-    likes: 180,
-  },
-  {
-    id: 7,
-    image: "https://source.unsplash.com/random/300x300?sig=ts7&sound",
-    title: "Harmony",
-    creator: "MusicianEta",
-    price: 0.9,
-    likes: 250,
-  },
-  {
-    id: 8,
-    image: "https://source.unsplash.com/random/300x300?sig=ts8&block",
-    title: "Block Busters",
-    creator: "CreatorTheta",
-    price: 2.3,
-    likes: 400,
-  },
-];
-
-// Top Collections
-const topCollections: Collection[] = [
-  {
-    id: 1,
-    image: "https://source.unsplash.com/random/300x300?sig=col1&landscape",
-    name: "Cosmic Visions",
-    floorPrice: 4.2,
-    volume: 1240,
-    items: 999,
-  },
-  {
-    id: 2,
-    image: "https://source.unsplash.com/random/300x300?sig=col2&space",
-    name: "XRP Legends",
-    floorPrice: 6.8,
-    volume: 3100,
-    items: 5000,
-  },
-  {
-    id: 3,
-    image: "https://source.unsplash.com/random/300x300?sig=col3&abstract",
-    name: "Digital Dreamers",
-    floorPrice: 1.5,
-    volume: 890,
-    items: 1000,
-  },
-  {
-    id: 4,
-    image: "https://source.unsplash.com/random/300x300?sig=col4&cyber",
-    name: "Neon Punks",
-    floorPrice: 9.1,
-    volume: 5400,
-    items: 3333,
-  },
-  {
-    id: 5,
-    image: "https://source.unsplash.com/random/300x300?sig=col5&geometric",
-    name: "Void Fragments",
-    floorPrice: 2.3,
-    volume: 670,
-    items: 777,
-  },
-  {
-    id: 6,
-    image: "https://source.unsplash.com/random/300x300?sig=col6&texture",
-    name: "Silk Protocol",
-    floorPrice: 3.7,
-    volume: 2100,
-    items: 2222,
-  },
-  {
-    id: 7,
-    image: "https://source.unsplash.com/random/300x300?sig=col7&minimal",
-    name: "Ghost Garden",
-    floorPrice: 0.8,
-    volume: 430,
-    items: 500,
-  },
-  {
-    id: 8,
-    image: "https://source.unsplash.com/random/300x300?sig=col8&dark",
-    name: "Abyss Club",
-    floorPrice: 12.0,
-    volume: 8800,
-    items: 10000,
-  },
-];
+const formatPrice = (offers: any[]) => {
+  if (!offers || offers.length === 0) return "Not Listed";
+  const amount = offers[0].amount;
+  if (typeof amount === "string") {
+    return (Number(amount) / 1000000).toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
+  }
+  return amount.value;
+};
 
 // ─── Hero Slider ─────────────────────────────────────────────────────────────
-export const HeroSlider = component$(() => {
+export const HeroSlider = component$<{ slides: NftItem[] }>(({ slides }) => {
   const current = useSignal(0);
-  const total = featuredSlides.length;
+  const total = slides.length;
 
-  // Auto-advance
   // eslint-disable-next-line qwik/no-use-visible-task
-  useVisibleTask$(() => {
+  useVisibleTask$(({ track }) => {
+    track(() => total);
+    if (total <= 1) return;
     const id = setInterval(() => {
       current.value = (current.value + 1) % total;
     }, 5000);
@@ -222,269 +50,310 @@ export const HeroSlider = component$(() => {
   return (
     <section class="relative h-105 md:h-125 overflow-hidden">
       {/* Slides */}
-      {featuredSlides.map((slide, i) => (
+      {slides.map((slide, i) => (
         <div
-          key={slide.id}
+          key={slide.nftokenId}
           class={[
             "absolute inset-0 transition-opacity duration-700",
             i === current.value ? "opacity-100 z-10" : "opacity-0 z-0",
           ].join(" ")}
         >
           <img
-            height={100}
-            width={100}
-            src={slide.image}
-            alt={slide.title}
+            src={slide.image || FALLBACK_IMG}
+            alt={slide.name}
             class="w-full h-full object-cover"
+            loading="lazy"
+            onError$={(e) => {
+              (e.target as HTMLImageElement).src = FALLBACK_IMG;
+            }}
           />
           {/* Dark gradient overlay */}
-          <div class="absolute inset-0 bg-linear-to-t from-black/70 via-black/30 to-transparent" />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
-          {/* Slide info — bottom left */}
-          <div class="absolute bottom-14 left-6 md:left-10 z-20 text-white">
-            <p class="text-xs uppercase tracking-widest text-indigo-300 mb-1">
-              Featured Drop
-            </p>
-            <h2 class="text-3xl md:text-4xl font-bold leading-tight">
-              {slide.title}
+          {/* Content Box */}
+          <div class="absolute bottom-8 left-8 right-8 md:bottom-12 md:left-12 max-w-2xl text-white">
+            <span class="inline-block px-3 py-1 bg-white/20 backdrop-blur-md border border-white/30 rounded-full text-xs font-bold tracking-wider uppercase mb-3 shadow-sm">
+              Featured
+            </span>
+            <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight mb-2 drop-shadow-md">
+              {slide.name}
             </h2>
-            <p class="text-sm text-gray-300 mt-1">
-              by <span class="text-white font-medium">{slide.creator}</span>
-            </p>
-            <p class="mt-2 text-indigo-300 font-semibold text-lg">
-              {slide.price} XRP
-            </p>
+            <div class="flex items-center gap-4 text-sm font-medium opacity-90 mb-6 drop-shadow">
+              <span class="flex items-center gap-1.5">
+                <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-pink-500 to-violet-500 border border-white/50" />
+                {slide.issuer.slice(0, 8)}...
+              </span>
+              <span class="w-1.5 h-1.5 rounded-full bg-white/50" />
+              <span>{formatPrice(slide.sellOffers)}</span>
+            </div>
+
+            <div class="flex items-center gap-4">
+              <button class="px-6 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-100 transition-colors shadow-lg shadow-white/10">
+                View Asset
+              </button>
+              <button class="w-12 h-12 flex items-center justify-center rounded-xl bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all shadow-lg">
+                <LuHeart class="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       ))}
 
-      {/* Search bar overlay — top center */}
-      <div class="absolute top-0 left-0 right-0 z-30 flex flex-col items-center pt-8 px-4 pointer-events-none">
-        <h1 class="text-white text-3xl font-bold mb-4 drop-shadow-lg">
-          {"{XRPL}"}
-          <span class="text-indigo-400">Marketplace</span>
-        </h1>
-        <div class="flex w-full max-w-xl pointer-events-auto">
-          <div class="relative flex-1">
-            <input
-              type="text"
-              placeholder="Search NFTs, collections, creators..."
-              class="w-full py-2.5 pl-10 pr-4 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-800 shadow-lg text-sm"
-            />
-            <svg
-              class="absolute right-3 top-3 w-4 h-4 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* Prev / Next arrows */}
-      <button
-        onClick$={prev}
-        class="absolute left-3 top-1/2 -translate-y-1/2 z-30 bg-black/40 hover:bg-black/70 text-white rounded-full p-2 transition backdrop-blur-sm"
-        aria-label="Previous slide"
-      >
-        <LuChevronLeft class="w-5 h-5" />
-      </button>
-      <button
-        onClick$={next}
-        class="absolute right-3 top-1/2 -translate-y-1/2 z-30 bg-black/40 hover:bg-black/70 text-white rounded-full p-2 transition backdrop-blur-sm"
-        aria-label="Next slide"
-      >
-        <LuChevronRight class="w-5 h-5" />
-      </button>
-
-      {/* Dot indicators — bottom center */}
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2">
-        {featuredSlides.map((_, i) => (
-          <button
-            key={i}
-            onClick$={() => {
-              current.value = i;
-            }}
-            class={[
-              "w-2 h-2 rounded-full transition-all",
-              i === current.value ? "bg-white w-5" : "bg-white/40",
-            ].join(" ")}
-          />
-        ))}
-      </div>
-
-      {/* Browse All pill — bottom right */}
-      <div class="absolute bottom-4 right-5 z-30">
-        <Link
-          href="/ss/browse"
-          class="bg-white/10 backdrop-blur-sm border border-white/30 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-white/20 transition"
+      {/* Arrow Controls */}
+      <div class="absolute bottom-8 right-8 z-20 hidden md:flex gap-3">
+        <button
+          onClick$={prev}
+          class="w-12 h-12 flex items-center justify-center rounded-full bg-black/40 backdrop-blur border border-white/20 text-white hover:bg-black/60 transition"
         >
-          Browse All →
-        </Link>
+          <LuChevronLeft class="w-6 h-6" />
+        </button>
+        <button
+          onClick$={next}
+          class="w-12 h-12 flex items-center justify-center rounded-full bg-black/40 backdrop-blur border border-white/20 text-white hover:bg-black/60 transition"
+        >
+          <LuChevronRight class="w-6 h-6" />
+        </button>
       </div>
     </section>
   );
 });
 
+// ─── Horizontal Carousel ─────────────────────────────────────────────────────
 export const HorizontalCarousel = component$<{
   title: string;
-}>((props) => {
+  items: NftItem[];
+}>(({ title, items }) => {
   const scrollRef = useSignal<HTMLDivElement>();
 
-  const scrollLeft = $(() => {
-    if (scrollRef.value) {
-      scrollRef.value.scrollBy({ left: -320, behavior: "smooth" });
-    }
-  });
-
-  const scrollRight = $(() => {
-    if (scrollRef.value) {
-      scrollRef.value.scrollBy({ left: 320, behavior: "smooth" });
-    }
+  const scroll = $((direction: "left" | "right") => {
+    if (!scrollRef.value) return;
+    const amount = direction === "left" ? -400 : 400;
+    scrollRef.value.scrollBy({ left: amount, behavior: "smooth" });
   });
 
   return (
-    <section class="px-4 py-6">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-gray-900">{props.title}</h2>
-        <div class="flex gap-2">
-          <button
-            onClick$={scrollLeft}
-            class="bg-gray-100 hover:bg-indigo-100 text-gray-700 rounded-full p-2 transition"
-            aria-label="Scroll left"
-          >
-            <LuChevronLeft class="w-4 h-4" />
-          </button>
-          <button
-            onClick$={scrollRight}
-            class="bg-gray-100 hover:bg-indigo-100 text-gray-700 rounded-full p-2 transition"
-            aria-label="Scroll right"
-          >
-            <LuChevronRight class="w-4 h-4" />
-          </button>
+    <section class="py-12 bg-transparent relative overflow-hidden">
+      <div class="max-w-screen-2xl mx-auto px-4 md:px-8">
+        <div class="flex items-center justify-between mb-8">
+          <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">
+            {title}
+          </h2>
+          <div class="flex gap-2">
+            <button
+              onClick$={() => scroll("left")}
+              class="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 shadow-sm transition"
+            >
+              <LuChevronLeft class="w-5 h-5" />
+            </button>
+            <button
+              onClick$={() => scroll("right")}
+              class="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 shadow-sm transition"
+            >
+              <LuChevronRight class="w-5 h-5" />
+            </button>
+          </div>
         </div>
-      </div>
-      <div
-        ref={scrollRef}
-        class="flex gap-4 overflow-x-auto pb-2 scroll-smooth"
-        style="scrollbar-width: none; -ms-overflow-style: none;"
-      >
-        <Slot />
+
+        <div
+          ref={scrollRef}
+          class="flex gap-6 overflow-x-auto pb-6 scrollbar-hide snap-x snap-mandatory"
+        >
+          {items.map((nft, i) => (
+            <div key={nft.nftokenId} class="snap-start shrink-0">
+              <NFTCard nft={nft} rank={i + 1} />
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 });
 
-// ─── NFT Card ─────────────────────────────────────────────────────────────────
-export const NFTCard = component$<{ nft: NFT; rank?: number }>((props) => {
+// ─── NFT Card ────────────────────────────────────────────────────────────────
+export const NFTCard = component$<{ nft: NftItem; rank?: number }>((props) => {
   const { nft, rank } = props;
   return (
-    <div class="flex-none w-52 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer">
-      <div class="relative">
-        <img
-          height={100}
-          width={100}
-          src={nft.image}
-          alt={nft.title}
-          class="w-full h-44 object-cover"
-        />
-        {rank && (
-          <span class="absolute top-2 left-2 bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-            #{rank}
-          </span>
-        )}
-      </div>
-      <div class="p-3">
-        <h3 class="font-semibold text-sm text-gray-900 truncate">
-          {nft.title}
-        </h3>
-        <p class="text-xs text-gray-400 mt-0.5 truncate">by {nft.creator}</p>
-        <div class="mt-2 flex items-center justify-between">
-          <span class="text-indigo-600 font-bold text-sm">{nft.price} XRP</span>
-          <div class="flex items-center text-gray-400 text-xs">
-            <LuHeart class="w-3.5 h-3.5 mr-0.5 text-red-400" /> {nft.likes}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
-
-// ─── Collection Card ──────────────────────────────────────────────────────────
-export const CollectionCard = component$<{ col: Collection; rank?: number }>(
-  (props) => {
-    const { col, rank } = props;
-    return (
-      <div class="flex-none w-52 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer">
-        <div class="relative">
+    <Link href={`/search?address=${nft.owner}`}>
+      <div class="group relative w-64 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+        <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-100">
           <img
-            height={100}
-            width={100}
-            src={col.image}
-            alt={col.name}
-            class="w-full h-44 object-cover"
+            width={128}
+            height={128}
+            src={nft.image || FALLBACK_IMG}
+            alt={nft.name}
+            loading="lazy"
+            onError$={(e) => {
+              (e.target as HTMLImageElement).src = FALLBACK_IMG;
+            }}
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
+          {/* Overlay Gradient for contrast */}
+          <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+          {/* Quick Actions overlay */}
+          <div class="absolute bottom-3 right-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+            <button class="bg-white/90 backdrop-blur text-black text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-white">
+              View Info
+            </button>
+          </div>
+
+          {/* Rank badge */}
           {rank && (
-            <span class="absolute top-2 left-2 bg-emerald-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+            <span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/20">
               #{rank}
             </span>
           )}
+          {/* Heart */}
+          <button class="absolute top-3 right-3 p-2 rounded-full bg-black/20 backdrop-blur hover:bg-black/40 text-white transition-colors">
+            <LuHeart class="w-4 h-4" />
+          </button>
         </div>
-        <div class="p-3">
-          <h3 class="font-semibold text-sm text-gray-900 truncate">
-            {col.name}
+
+        <div class="mt-4 px-1">
+          <h3 class="font-bold text-gray-900 truncate tracking-tight text-base">
+            {nft.name}
           </h3>
-          <p class="text-xs text-gray-400 mt-0.5">
-            {col.items.toLocaleString()} items
+          <p class="text-sm text-gray-500 font-medium truncate mt-0.5 flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 inline-block shrink-0" />
+            {nft.issuer.slice(0, 8)}...
           </p>
-          <div class="mt-2 flex items-center justify-between">
+
+          <div class="mt-4 flex items-center justify-between">
             <div>
-              <p class="text-xs text-gray-400">Floor</p>
-              <p class="text-indigo-600 font-bold text-sm">
-                {col.floorPrice} XRP
+              <p class="text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-0.5">
+                Price
               </p>
-            </div>
-            <div class="text-right">
-              <p class="text-xs text-gray-400">Volume</p>
-              <p class="text-emerald-600 font-bold text-sm">
-                {col.volume.toLocaleString()}
+              <p class="text-sm font-extrabold text-blue-600">
+                {formatPrice(nft.sellOffers)}
               </p>
             </div>
           </div>
         </div>
       </div>
-    );
-  },
-);
+    </Link>
+  );
+});
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default component$(() => {
+  const networkCtx = useNetworkContext();
+  const walletCtx = useWalletContext();
+  const loading = useSignal(true);
+  const slides = useSignal<NftItem[]>([]);
+  const sellers = useSignal<NftItem[]>([]);
+  const trending = useSignal<NftItem[]>([]);
+
+  useTask$(({ track }) => {
+    const net = track(() => networkCtx.activeNetwork.value);
+
+    // Ensure wallet network aligns (simple logic can be expanded)
+    if (walletCtx.connected.value && walletCtx.walletType.value) {
+      // check if connected to right network, handle mismatch if needed
+    }
+
+    loading.value = true;
+    fetch(`/api/global-marketplace?network=${net}&limit=20`)
+      .then((res) => res.json())
+      .then((data: any) => {
+        const nfts = data.nfts || [];
+        slides.value = nfts.slice(0, 4);
+        sellers.value = nfts.slice(4, 12);
+        trending.value = nfts.slice(12, 20);
+        loading.value = false;
+      })
+      .catch(() => {
+        loading.value = false;
+      });
+  });
+
   return (
     <div class="min-h-screen mt-16 flex flex-col bg-gray-50">
-      <HeroSlider />
+      <div class="flex justify-between items-center px-4 md:px-8 py-4 bg-white border-b border-gray-100 shadow-sm">
+        <h1 class="text-xl font-bold tracking-tight text-gray-900 hidden md:block">
+          Marketplace
+        </h1>
+        {/* Dual Network Toggle */}
+        <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl shadow-inner border border-gray-200">
+          <button
+            onClick$={() => {
+              networkActions.setActiveNetwork("xrpl");
+            }}
+            class={[
+              "w-10 h-10 rounded-lg flex items-center justify-center transition-all",
+              networkCtx.activeNetwork.value === "xrpl"
+                ? "bg-white border border-gray-200 shadow-sm ring-1 ring-blue-500/20"
+                : "hover:bg-gray-100",
+            ].join(" ")}
+            title="XRPL Network"
+          >
+            {}
+            {/* eslint-disable-next-line qwik/jsx-img */}
+            <img
+              src="/public/icons/xrpl.png"
+              alt="XRPL"
+              width={24}
+              height={24}
+              class={
+                networkCtx.activeNetwork.value === "xrpl"
+                  ? ""
+                  : "grayscale opacity-50"
+              }
+            />
+          </button>
+          <button
+            onClick$={() => {
+              networkActions.setActiveNetwork("xahau");
+            }}
+            class={[
+              "w-10 h-10 rounded-lg flex items-center justify-center transition-all",
+              networkCtx.activeNetwork.value === "xahau"
+                ? "bg-white border border-gray-200 shadow-sm ring-1 ring-yellow-500/20"
+                : "hover:bg-gray-100",
+            ].join(" ")}
+            title="Xahau Network"
+          >
+            {}
+            {/* eslint-disable-next-line qwik/jsx-img */}
+            <img
+              src="/public/icons/xaman.png"
+              alt="Xahau"
+              width={24}
+              height={24}
+              class={
+                networkCtx.activeNetwork.value === "xahau"
+                  ? ""
+                  : "grayscale opacity-50"
+              }
+            />
+          </button>
+        </div>
+      </div>
 
-      {/* Top Sellers */}
-      <HorizontalCarousel title="🔥 Top Sellers">
-        {topSellers.map((nft, i) => (
-          <NFTCard key={nft.id} nft={nft} rank={i + 1} />
-        ))}
-      </HorizontalCarousel>
+      {loading.value ? (
+        <div class="flex justify-center items-center py-20 min-h-[50vh]">
+          <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <p class="mt-4 text-gray-500 ml-3 font-medium">
+            Loading live ledger data...
+          </p>
+        </div>
+      ) : (
+        <>
+          {slides.value.length > 0 && <HeroSlider slides={slides.value} />}
 
-      <div class="mx-4 border-t border-gray-200" />
+          {sellers.value.length > 0 && (
+            <HorizontalCarousel title="🔥 Top Listings" items={sellers.value} />
+          )}
 
-      {/* Top Collections */}
-      <HorizontalCarousel title="✨ Top Collections">
-        {topCollections.map((col, i) => (
-          <CollectionCard key={col.id} col={col} rank={i + 1} />
-        ))}
-      </HorizontalCarousel>
+          <div class="mx-4 md:mx-8 border-t border-gray-200" />
+
+          {trending.value.length > 0 && (
+            <HorizontalCarousel
+              title="✨ Trending NFTs"
+              items={trending.value}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 });

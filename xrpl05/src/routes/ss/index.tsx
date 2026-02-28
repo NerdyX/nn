@@ -5,7 +5,7 @@ import {
   useTask$,
   $,
 } from "@builder.io/qwik";
-import { DocumentHead, Link } from "@builder.io/qwik-city";
+import { DocumentHead, useNavigate } from "@builder.io/qwik-city";
 import { LuHeart, LuChevronLeft, LuChevronRight } from "@qwikest/icons/lucide";
 import { useNetworkContext } from "~/context/network-context";
 import { useWalletContext } from "~/context/wallet-context";
@@ -66,9 +66,11 @@ export const HeroSlider = component$<{ slides: NftItem[] }>(({ slides }) => {
             onError$={(e) => {
               (e.target as HTMLImageElement).src = FALLBACK_IMG;
             }}
+            width={1200} // Added width for optimization
+            height={800} // Added height for optimization
           />
           {/* Dark gradient overlay */}
-          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          <div class="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
 
           {/* Content Box */}
           <div class="absolute bottom-8 left-8 right-8 md:bottom-12 md:left-12 max-w-2xl text-white">
@@ -80,7 +82,7 @@ export const HeroSlider = component$<{ slides: NftItem[] }>(({ slides }) => {
             </h2>
             <div class="flex items-center gap-4 text-sm font-medium opacity-90 mb-6 drop-shadow">
               <span class="flex items-center gap-1.5">
-                <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-pink-500 to-violet-500 border border-white/50" />
+                <div class="w-6 h-6 rounded-full bg-linear-to-tr from-pink-500 to-violet-500 border border-white/50" />
                 {slide.issuer.slice(0, 8)}...
               </span>
               <span class="w-1.5 h-1.5 rounded-full bg-white/50" />
@@ -159,6 +161,7 @@ export const HorizontalCarousel = component$<{
           class="flex gap-6 overflow-x-auto pb-6 scrollbar-hide snap-x snap-mandatory"
         >
           {items.map((nft, i) => (
+            // Removed the Link component wrapping NFTCard
             <div key={nft.nftokenId} class="snap-start shrink-0">
               <NFTCard nft={nft} rank={i + 1} />
             </div>
@@ -172,65 +175,74 @@ export const HorizontalCarousel = component$<{
 // ─── NFT Card ────────────────────────────────────────────────────────────────
 export const NFTCard = component$<{ nft: NftItem; rank?: number }>((props) => {
   const { nft, rank } = props;
+  const nav = useNavigate();
+  // const loc = useLocation(); // This variable is now unused, removed in original request. Keeping for context.
+
+  const openNftModal = $(() => {
+    // Navigate to the new NFT detail route
+    nav(`/ss/nft/${nft.nftokenId}`);
+  });
+
   return (
-    <Link href={`/search?address=${nft.owner}`}>
-      <div class="group relative w-64 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-        <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-100">
-          <img
-            width={128}
-            height={128}
-            src={nft.image || FALLBACK_IMG}
-            alt={nft.name}
-            loading="lazy"
-            onError$={(e) => {
-              (e.target as HTMLImageElement).src = FALLBACK_IMG;
-            }}
-            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-          {/* Overlay Gradient for contrast */}
-          <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+    <div
+      class="group relative w-64 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+      onClick$={openNftModal}
+    >
+      <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-gray-100">
+        <img
+          width={128}
+          height={128}
+          src={nft.image || FALLBACK_IMG}
+          alt={nft.name}
+          loading="lazy"
+          onError$={(e) => {
+            (e.target as HTMLImageElement).src = FALLBACK_IMG;
+          }}
+          class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {/* Overlay Gradient for contrast */}
+        <div class="absolute inset-0 bg-linear-to-b from-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-          {/* Quick Actions overlay */}
-          <div class="absolute bottom-3 right-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-            <button class="bg-white/90 backdrop-blur text-black text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-white">
-              View Info
-            </button>
-          </div>
-
-          {/* Rank badge */}
-          {rank && (
-            <span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/20">
-              #{rank}
-            </span>
-          )}
-          {/* Heart */}
-          <button class="absolute top-3 right-3 p-2 rounded-full bg-black/20 backdrop-blur hover:bg-black/40 text-white transition-colors">
-            <LuHeart class="w-4 h-4" />
+        {/* Quick Actions overlay */}
+        <div class="absolute bottom-3 right-3 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+          <button class="bg-white/90 backdrop-blur text-black text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-white">
+            View Info
           </button>
         </div>
 
-        <div class="mt-4 px-1">
-          <h3 class="font-bold text-gray-900 truncate tracking-tight text-base">
-            {nft.name}
-          </h3>
-          <p class="text-sm text-gray-500 font-medium truncate mt-0.5 flex items-center gap-1.5">
-            <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 inline-block shrink-0" />
-            {nft.issuer.slice(0, 8)}...
-          </p>
+        {/* Rank badge */}
+        {rank && (
+          <span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/20">
+            #{rank}
+          </span>
+        )}
+        {/* Heart */}
+        <button class="absolute top-3 right-3 p-2 rounded-full bg-black/20 backdrop-blur hover:bg-black/40 text-white transition-colors">
+          <LuHeart class="w-4 h-4" />
+        </button>
+      </div>
 
-          <div class="mt-4 flex items-center justify-between">
-            <div>
-              <p class="text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-0.5">
-                Price
-              </p>
-              <p class="text-sm font-extrabold text-blue-600">
-                {formatPrice(nft.sellOffers)}
-              </p>
-            </div>
+      <div class="mt-4 px-1">
+        <h3 class="font-bold text-gray-900 truncate tracking-tight text-base">
+          {nft.name}
+        </h3>
+        <p class="text-sm text-gray-500 font-medium truncate mt-0.5 flex items-center gap-1.5">
+          <span class="w-4 h-4 rounded-full bg-linear-to-tr from-cyan-400 to-blue-500 inline-block shrink-0" />
+          {nft.issuer.slice(0, 8)}...
+        </p>
+
+        <div class="mt-4 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-0.5">
+              Price
+            </p>
+            <p class="text-sm font-extrabold text-blue-600">
+              {formatPrice(nft.sellOffers)}
+            </p>
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 });
 
@@ -286,10 +298,9 @@ export default component$(() => {
             ].join(" ")}
             title="XRPL Network"
           >
-            {}
             {/* eslint-disable-next-line qwik/jsx-img */}
             <img
-              src="/public/icons/xrpl.png"
+              src="/icons/xrpl.png"
               alt="XRPL"
               width={24}
               height={24}
@@ -312,10 +323,9 @@ export default component$(() => {
             ].join(" ")}
             title="Xahau Network"
           >
-            {}
             {/* eslint-disable-next-line qwik/jsx-img */}
             <img
-              src="/public/icons/xaman.png"
+              src="/icons/xaman.png"
               alt="Xahau"
               width={24}
               height={24}

@@ -9,6 +9,8 @@ import { LuHeart, LuSlidersHorizontal, LuSearch } from "@qwikest/icons/lucide";
 import { useNetworkContext } from "~/context/network-context";
 import { networkActions } from "~/lib/store/network";
 import type { NftItem } from "~/lib/marketplace-data";
+//import ImgXrpl from '~/media/icons/XRPL.svg?jsx';
+//import ImgXahaul from '~/media/icons/XAHAUL.png?jsx';
 
 const FALLBACK_IMG = "https://placehold.co/400x400/eeeeee/999999?text=NFT";
 
@@ -56,7 +58,7 @@ export default component$(() => {
   return (
     <div class="h-[calc(100vh-4rem)] mt-16 bg-gray-50 flex flex-col md:flex-row overflow-hidden w-full">
       {/* Filters Sidebar */}
-      <aside class="w-full md:w-64 bg-white border-r border-gray-200 p-6 flex-shrink-0 hidden md:flex flex-col shadow-sm overflow-y-auto h-full">
+      <aside class="w-full md:w-64 bg-white border-r border-gray-200 p-6 shrink-0 hidden md:flex flex-col shadow-sm overflow-y-auto h-full">
         <div class="flex items-center gap-2 font-extrabold text-xl mb-8 text-gray-900 tracking-tight">
           <LuSlidersHorizontal class="w-5 h-5 text-blue-600" /> Filters
         </div>
@@ -66,50 +68,36 @@ export default component$(() => {
             <h3 class="font-bold text-xs uppercase tracking-wider mb-4 text-gray-400">
               Network
             </h3>
-            <div class="space-y-3 text-sm text-gray-700 font-medium">
+            <div class="space-y-2 -ml-14 text-sm text-gray-700 font-medium">
               <label
-                class="flex items-center gap-3 cursor-pointer group"
+                class="flex items-center justify-center gap-3 cursor-pointer group"
                 onClick$={() => networkActions.setActiveNetwork("xrpl")}
               >
                 <img
                   src="/icons/XRPL.svg"
                   alt="XRPL"
                   class={[
-                    "w-20 h-10 object-contain transition-all",
+                    "w-40 h-10 object-contain transition-all duration-300 rounded-lg p-1",
                     networkCtx.activeNetwork.value === "xrpl"
-                      ? "opacity-100 scale-110"
-                      : "opacity-40 grayscale group-hover:opacity-70",
+                      ? "ring-2 ring-offset-2 ring-blue-600 shadow-md"
+                      : "grayscale opacity-50 hover:opacity-100",
                   ].join(" ")}
                 />
-                <span
-                  class={
-                    networkCtx.activeNetwork.value === "xrpl"
-                      ? "font-bold text-blue-600"
-                      : ""
-                  }
-                ></span>
               </label>
               <label
-                class="flex items-center gap-3 cursor-pointer group"
+                class="flex items-center justify-center gap-3 cursor-pointer group"
                 onClick$={() => networkActions.setActiveNetwork("xahau")}
               >
                 <img
                   src="/icons/XAHAUL.png"
                   alt="Xahau"
                   class={[
-                    "w-20 h-10 object-contain transition-all",
+                    "w-40 h-10 object-contain transition-all duration-300 rounded-lg p-1",
                     networkCtx.activeNetwork.value === "xahau"
-                      ? "opacity-100 scale-110"
-                      : "opacity-40 grayscale group-hover:opacity-70",
+                      ? "ring-2 ring-offset-2 ring-yellow-500 shadow-md"
+                      : "grayscale opacity-50 hover:opacity-100",
                   ].join(" ")}
                 />
-                <span
-                  class={
-                    networkCtx.activeNetwork.value === "xahau"
-                      ? "font-bold text-yellow-600"
-                      : ""
-                  }
-                ></span>
               </label>
             </div>
           </div>
@@ -210,7 +198,7 @@ export default component$(() => {
                           }}
                           class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         />
-                        <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div class="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
                         <div class="absolute bottom-3 inset-x-0 flex justify-center translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
                           <button class="bg-white/95 backdrop-blur-sm text-gray-900 text-xs font-bold px-5 py-2 rounded-full shadow-lg hover:bg-white hover:scale-105 transition-all">
@@ -227,7 +215,7 @@ export default component$(() => {
                           {nft.name}
                         </h3>
                         <p class="text-sm text-gray-500 font-medium truncate mt-1 flex items-center gap-1.5">
-                          <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 inline-block shrink-0 shadow-inner" />
+                          <span class="w-4 h-4 rounded-full bg-linear-to-tr from-cyan-400 to-blue-500 inline-block shrink-0 shadow-inner" />
                           {nft.issuer.slice(0, 8)}...
                         </p>
                         <div class="mt-auto pt-5 flex items-end justify-between">

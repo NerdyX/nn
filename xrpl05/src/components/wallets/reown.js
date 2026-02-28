@@ -41,7 +41,7 @@ let _disconnectHandler = null;
  * @returns {boolean}
  */
 export function isReownAvailable() {
-  return !!projectId && projectId !== "your-reown-project-id-here";
+  return !!projectId && projectId !== "f8365db086fc485ed4bb21ca002ca42f";
 }
 
 // ──────────────────────────────────────────────

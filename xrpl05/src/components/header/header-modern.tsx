@@ -2,13 +2,13 @@
 
 import { component$, useSignal, $ } from "@builder.io/qwik";
 import { useLocation, useNavigate } from "@builder.io/qwik-city";
+import { walletActions } from "~/lib/store/wallet";
 import {
-  WalletContext,
+  useWalletContext,
   truncateAddress,
   clearWalletSession,
   persistWalletSession, // FIX #4: single source of truth — no longer re-imported inside connectGutteWallet
 } from "~/context/wallet-context";
-import { useContext } from "@builder.io/qwik";
 
 interface HeaderProps {
   transparent?: boolean;
@@ -24,7 +24,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
   const qrImage = useSignal("");
   const showQrModal = useSignal(false);
 
-  const walletCtx = useContext(WalletContext);
+  const walletCtx = useWalletContext();
 
   const isConnected = walletCtx.connected.value;
 
@@ -50,7 +50,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
         let errData: Record<string, unknown> = {};
         try {
           errData = await res.json();
-        } catch {
+              } catch {
           errData = {};
         }
         throw new Error(
@@ -93,10 +93,11 @@ export const HeaderModern = component$<HeaderProps>(() => {
             showQrModal.value = false;
 
             const account = result.response.account;
-            walletCtx.connected.value = true;
-            walletCtx.walletType.value = "xaman";
-            walletCtx.address.value = account;
-            walletCtx.displayName.value = "";
+            
+walletActions.setWalletState({ connected: true });
+            walletActions.setWalletState({ walletType: "xaman" });
+            walletActions.setWalletState({ address: account });
+            walletActions.setWalletState({ displayName: "" });
 
             persistWalletSession({
               address: account,
@@ -116,7 +117,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
             walletLoading.value = null;
             showQrModal.value = false;
           }
-        } catch {
+              } catch {
           // Continue polling
         }
       }, 2000);
@@ -129,9 +130,9 @@ export const HeaderModern = component$<HeaderProps>(() => {
           showQrModal.value = false;
         }
       }, 60000);
-    } catch (e) {
-      console.error("Xaman connection failed", e);
-      walletError.value = e instanceof Error ? e.message : "Connection failed";
+          } catch {
+      console.error("Xaman connection failed");
+      walletError.value = "Connection failed";
       walletLoading.value = null;
     }
   });
@@ -145,10 +146,11 @@ export const HeaderModern = component$<HeaderProps>(() => {
       const { connectCrossmark } = await import("../wallets/crossmark");
       const result = await connectCrossmark();
 
-      walletCtx.connected.value = true;
-      walletCtx.walletType.value = "crossmark";
-      walletCtx.address.value = result.address;
-      walletCtx.displayName.value = "";
+      
+walletActions.setWalletState({ connected: true });
+      walletActions.setWalletState({ walletType: "crossmark" });
+      walletActions.setWalletState({ address: result.address });
+      walletActions.setWalletState({ displayName: "" });
 
       persistWalletSession({
         address: result.address,
@@ -158,9 +160,9 @@ export const HeaderModern = component$<HeaderProps>(() => {
 
       showWalletModal.value = false;
       walletLoading.value = null;
-    } catch (e) {
-      console.error("Crossmark connection failed", e);
-      walletError.value = e instanceof Error ? e.message : "Connection failed";
+          } catch {
+      console.error("Crossmark connection failed");
+      walletError.value = "Connection failed";
       walletLoading.value = null;
     }
   });
@@ -175,15 +177,15 @@ export const HeaderModern = component$<HeaderProps>(() => {
     try {
       const { connectGutteAndBind } = await import("../wallets/gutte");
 
-      await connectGutteAndBind(walletCtx, () => {
+      await connectGutteAndBind( () => {
         showWalletModal.value = false;
       });
 
       showWalletModal.value = false;
       walletLoading.value = null;
-    } catch (e) {
-      console.error("Gutte connection failed", e);
-      walletError.value = e instanceof Error ? e.message : "Connection failed";
+          } catch {
+      console.error("Gutte connection failed");
+      walletError.value = "Connection failed";
       walletLoading.value = null;
     }
   });
@@ -205,10 +207,11 @@ export const HeaderModern = component$<HeaderProps>(() => {
 
       const result = await connectGemWallet();
 
-      walletCtx.connected.value = true;
-      walletCtx.walletType.value = "gem";
-      walletCtx.address.value = result.address;
-      walletCtx.displayName.value = "";
+      
+walletActions.setWalletState({ connected: true });
+      walletActions.setWalletState({ walletType: "gem" });
+      walletActions.setWalletState({ address: result.address });
+      walletActions.setWalletState({ displayName: "" });
 
       persistWalletSession({
         address: result.address,
@@ -218,21 +221,59 @@ export const HeaderModern = component$<HeaderProps>(() => {
 
       showWalletModal.value = false;
       walletLoading.value = null;
-    } catch (e) {
-      console.error("GemWallet connection failed", e);
-      walletError.value = e instanceof Error ? e.message : "Connection failed";
+          } catch {
+      console.error("GemWallet connection failed");
+      walletError.value = "Connection failed";
+      walletLoading.value = null;
+    }
+  });
+
+  // ── Reown Connection ──
+  const connectReownWallet = $(async () => {
+    walletLoading.value = "reown";
+    walletError.value = "";
+
+    try {
+      const { connectReown } = await import("../wallets/reown");
+
+      const result = await connectReown();
+
+      
+walletActions.setWalletState({ connected: true });
+      walletActions.setWalletState({ walletType: "reown" });
+      walletActions.setWalletState({ address: result.address });
+      walletActions.setWalletState({ displayName: "" });
+
+      persistWalletSession({
+        address: result.address,
+        type: "reown",
+        connectedAt: new Date().toISOString(),
+      });
+
+      showWalletModal.value = false;
+      walletLoading.value = null;
+          } catch {
+      console.error("Reown connection failed");
+      walletError.value = "Connection failed";
       walletLoading.value = null;
     }
   });
 
   // ── Disconnect ──
-  const handleDisconnect = $(() => {
-    walletCtx.connected.value = false;
-    walletCtx.walletType.value = null;
-    walletCtx.address.value = "";
-    walletCtx.displayName.value = "";
+  const handleDisconnect = $(async () => {
+    walletActions.setWalletState({ connected: false });
+    walletActions.setWalletState({ walletType: null });
+    walletActions.setWalletState({ address: "" });
+    walletActions.setWalletState({ displayName: "" });
 
     clearWalletSession();
+
+    try {
+      const { disconnectReown } = await import("../wallets/reown");
+      await disconnectReown();
+          } catch {
+      // Ignore
+    }
 
     document.cookie =
       "xaman_jwt=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
@@ -656,6 +697,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                     flexShrink: "0",
                   }}
                 >
+                  {/* eslint-disable-next-line qwik/jsx-img */}
                   <img src="/public/icons/xaman.png" alt="Xahau Logo" />
                 </div>
                 <div style={{ textAlign: "left", flex: "1" }}>
@@ -722,6 +764,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                     flexShrink: "0",
                   }}
                 >
+                  {/* eslint-disable-next-line qwik/jsx-img */}
                   <img src="/public/icons/xaman.png" alt="Xahau Logo" />
                 </div>
                 <div style={{ textAlign: "left", flex: "1" }}>
@@ -789,6 +832,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                     flexShrink: "0",
                   }}
                 >
+                  {/* eslint-disable-next-line qwik/jsx-img */}
                   <img src="/public/icons/xaman.png" alt="Xahau Logo" />
                 </div>
                 <div style={{ textAlign: "left", flex: "1" }}>
@@ -855,6 +899,7 @@ export const HeaderModern = component$<HeaderProps>(() => {
                     flexShrink: "0",
                   }}
                 >
+                  {/* eslint-disable-next-line qwik/jsx-img */}
                   <img src="/public/icons/xaman.png" alt="Xahau Logo" />
                 </div>
                 <div style={{ textAlign: "left", flex: "1" }}>
@@ -878,6 +923,64 @@ export const HeaderModern = component$<HeaderProps>(() => {
                       width: "20px",
                       height: "20px",
                       border: "2px solid #f59e0b",
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "spin 0.8s linear infinite",
+                    }}
+                  />
+                )}
+              </button>
+
+              {/* Reown / WalletConnect */}
+              <button
+                onClick$={connectReownWallet}
+                disabled={walletLoading.value !== null}
+                class="cursor-pointer"
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "14px 16px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  background: "rgba(255,255,255,0.8)",
+                  transition: "all 0.2s",
+                  opacity:
+                    walletLoading.value !== null &&
+                    walletLoading.value !== "reown"
+                      ? "0.5"
+                      : "1",
+                }}
+              >
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    background: "#3b82f6",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: "20px" }}>📱</span>
+                </div>
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <div style={{ fontWeight: 600, color: "#111827" }}>
+                    WalletConnect
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                    Mobile wallets
+                  </div>
+                </div>
+                {walletLoading.value === "reown" && (
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      border: "2px solid #3b82f6",
                       borderTopColor: "transparent",
                       borderRadius: "50%",
                       animation: "spin 0.8s linear infinite",

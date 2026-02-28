@@ -1,23 +1,20 @@
 import {
   component$,
   Slot,
-  useContextProvider,
   useSignal,
   useTask$,
   useVisibleTask$,
 } from "@builder.io/qwik";
 import { routeLoader$, useLocation, useNavigate } from "@builder.io/qwik-city";
 import { HeaderModern } from "../components/header/header-modern";
+import { type Network, useNetworkContext } from "../context/network-context";
 import {
-  NetworkContext,
-  NETWORK_CONFIG,
-  type Network,
-} from "../context/network-context";
-import {
-  WalletContext,
   type WalletType,
   restoreWalletSession,
+  useWalletContext,
 } from "../context/wallet-context";
+import { networkActions } from "../lib/store/network";
+import { walletActions } from "../lib/store/wallet";
 
 export const useXamanSession = routeLoader$(async ({ cookie }) => {
   const jwt = cookie.get("xaman_jwt")?.value;
@@ -59,72 +56,56 @@ export const useXamanSession = routeLoader$(async ({ cookie }) => {
 });
 
 export default component$(() => {
-  const activeNetwork = useSignal<Network>("xrpl");
-  const wsUrl = useSignal<string>(NETWORK_CONFIG.xrpl.ws);
-
-  useContextProvider(NetworkContext, { activeNetwork, wsUrl });
-
-  const walletConnected = useSignal(false);
-  const walletType = useSignal<WalletType>(null);
-  const walletAddress = useSignal("");
-  const walletDisplayName = useSignal("");
-
-  // Track whether client-side wallet restoration has finished.
-  // Until it has, we should NOT redirect away from /dashboard —
-  // the user may well be connected but we haven't read localStorage yet.
   const walletRestored = useSignal(false);
+  const serverSession = useXamanSession();
+  const location = useLocation();
+  const nav = useNavigate();
 
-  useContextProvider(WalletContext, {
-    connected: walletConnected,
-    walletType,
-    address: walletAddress,
-    displayName: walletDisplayName,
-  });
+  const { activeNetwork } = useNetworkContext();
+  const { connected, walletType } = useWalletContext();
 
+  // ── Network preference sync ──
   useTask$(({ track }) => {
     const net = track(() => activeNetwork.value);
-    wsUrl.value = NETWORK_CONFIG[net].ws;
-
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("preferredNetwork", net);
     }
   });
 
+  // ── Hydrate from localStorage ──
   // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(() => {
     if (typeof localStorage !== "undefined") {
       const saved = localStorage.getItem("preferredNetwork");
       if (saved === "xahau" || saved === "xrpl") {
-        activeNetwork.value = saved;
+        networkActions.setActiveNetwork(saved as Network);
       }
     }
 
     const session = restoreWalletSession();
     if (session) {
-      walletConnected.value = true;
-      walletType.value = session.type;
-      walletAddress.value = session.address;
-      walletDisplayName.value = session.name ?? "";
+      walletActions.setWalletState({
+        connected: true,
+        walletType: session.type as WalletType,
+        address: session.address,
+        displayName: session.name ?? "",
+      });
     }
 
     // Mark restoration complete so the route guard below can act
     walletRestored.value = true;
   });
 
-  const serverSession = useXamanSession();
-  const location = useLocation();
-  const nav = useNavigate();
-
   // ── Hydrate wallet from server-side Xaman JWT (if present) ──
   useTask$(({ track }) => {
     const sess = track(() => serverSession.value);
     if (sess?.connected && sess.address) {
-      walletConnected.value = true;
-      walletAddress.value = sess.address;
-      walletDisplayName.value = sess.name ?? "";
-      if (!walletType.value) {
-        walletType.value = "xaman";
-      }
+      walletActions.setWalletState({
+        connected: true,
+        address: sess.address,
+        displayName: sess.name ?? "",
+        walletType: walletType.value || "xaman",
+      });
     }
   });
 
@@ -135,7 +116,7 @@ export default component$(() => {
   // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(({ track }) => {
     const pathname = track(() => location.url.pathname);
-    const clientConnected = track(() => walletConnected.value);
+    const clientConnected = track(() => connected.value);
     const restored = track(() => walletRestored.value);
     const serverConnected = serverSession.value?.connected;
 

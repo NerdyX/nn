@@ -4,6 +4,7 @@ export const ConsentModal = component$(() => {
   const isVisible = useSignal(false);
   const activeTab = useSignal<"consent" | "terms" | "privacy">("consent");
 
+  // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(() => {
     if (typeof localStorage !== "undefined") {
       const hasConsented = localStorage.getItem("app_consent_accepted");

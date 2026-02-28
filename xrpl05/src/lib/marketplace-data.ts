@@ -3,7 +3,7 @@
 // Shared marketplace data layer — used by both the API route and routeLoader$.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { cachedFetch, cacheKey } from "~/lib/d1-cache";
+import { cachedFetch, cacheKey } from "~/lib/utils/d1-cache";
 
 // ─── Network config ───────────────────────────────────────────────────────────
 export const NETWORK_NODES: Record<string, string[]> = {

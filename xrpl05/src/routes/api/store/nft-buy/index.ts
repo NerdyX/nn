@@ -153,7 +153,7 @@ async function createXRPLBuyOffer(
     };
 
     // Auto-fill transaction fields (Fee, Sequence, LastLedgerSequence)
-    const prepared = await client.autofill(transaction);
+    const prepared = await client.autofill(transaction as any);
 
     // Note: In a real implementation, you would typically:
     // 1. Return the prepared transaction to the client for signing
@@ -244,7 +244,7 @@ async function createXahauBuyOffer(
     };
 
     // Auto-fill transaction fields
-    const prepared = await client.autofill(transaction);
+    const prepared = await client.autofill(transaction as any);
 
     return {
       success: true,

@@ -1,14 +1,16 @@
 // src/components/ui/network-toggle.tsx
 import { component$, $ } from "@builder.io/qwik";
 import { useNetworkContext, NETWORK_CONFIG } from "~/context/network-context";
+import { networkActions } from "~/lib/store/network";
 
 export default component$(() => {
   const ctx = useNetworkContext();
 
   const toggle$ = $(() => {
     const next = ctx.activeNetwork.value === "xrpl" ? "xahau" : "xrpl";
-    ctx.activeNetwork.value = next;
-    ctx.wsUrl.value = NETWORK_CONFIG[next].ws;
+    
+    networkActions.setActiveNetwork(next);
+    
   });
 
   const isXahau = ctx.activeNetwork.value === "xahau";

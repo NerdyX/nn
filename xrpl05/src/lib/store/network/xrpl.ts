@@ -516,7 +516,7 @@ class XRPLClientManager {
           transaction: txHash,
         });
 
-        if (response.validated) {
+        if ((response as any).validated) {
           console.log(`[XRPL] Transaction ${txHash} validated`);
           return response;
         }
@@ -540,4 +540,3 @@ class XRPLClientManager {
   }
 
   export { clientManager };
-  export { XRPL_NETWORKS };

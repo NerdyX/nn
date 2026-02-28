@@ -169,7 +169,7 @@ async function acceptXRPLOffer(
     };
 
     // Auto-fill transaction fields
-    const prepared = await client.autofill(transaction);
+    const prepared = await client.autofill(transaction as any);
 
     return {
       success: true,
@@ -182,7 +182,7 @@ async function acceptXRPLOffer(
           buyOffer: request.buyOfferId,
         },
         network: "xrpl",
-        brokerFee: request.brokerFee,
+        brokerFee: request.brokerFee as any,
         preparedTransaction: prepared,
       },
     };
@@ -266,7 +266,7 @@ async function acceptXahauOffer(
     };
 
     // Auto-fill transaction fields
-    const prepared = await client.autofill(transaction);
+    const prepared = await client.autofill(transaction as any);
 
     return {
       success: true,
@@ -279,7 +279,7 @@ async function acceptXahauOffer(
           buyOffer: request.buyOfferId,
         },
         network: "xahau",
-        brokerFee: request.brokerFee,
+        brokerFee: request.brokerFee as any,
         preparedTransaction: prepared,
       },
     };

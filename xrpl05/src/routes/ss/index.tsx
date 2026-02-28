@@ -204,6 +204,7 @@ export const HeroSlider = component$(() => {
   const total = featuredSlides.length;
 
   // Auto-advance
+  // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(() => {
     const id = setInterval(() => {
       current.value = (current.value + 1) % total;

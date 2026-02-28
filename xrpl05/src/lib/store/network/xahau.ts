@@ -596,12 +596,12 @@ export async function waitForValidation(txHash: string): Promise<any> {
         transaction: txHash,
       });
 
-      if (response.validated) {
+      if ((response as any).validated) {
         console.log(`[Xahau] Transaction ${txHash} validated`);
 
         // Track hook executions if present
-        if (response.hook_executions && response.hook_executions.length > 0) {
-          console.log(`[Xahau] Hook executions detected:`, response.hook_executions);
+        if ((response as any).hook_executions && (response as any).hook_executions.length > 0) {
+          console.log(`[Xahau] Hook executions detected:`, (response as any).hook_executions);
         }
 
         return response;
@@ -638,11 +638,11 @@ export async function waitForValidation(txHash: string): Promise<any> {
        transaction: txHash,
      });
 
-     if (!response.hook_executions) {
+     if (!(response as any).hook_executions) {
        return [];
      }
 
-     return response.hook_executions.map((execution: any) => ({
+     return (response as any).hook_executions.map((execution: any) => ({
        account: execution.HookExecution.HookAccount,
        hash: execution.HookExecution.HookHash,
        result: execution.HookExecution.HookResult,
@@ -692,4 +692,3 @@ export async function waitForValidation(txHash: string): Promise<any> {
  }
 
  export { clientManager };
- export { XAHAU_NETWORKS };

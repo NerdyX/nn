@@ -11,6 +11,7 @@ export default component$((props: Props) => {
   const containerRef = useSignal<HTMLDivElement>();
   const globeRef = useSignal<any>(null);
 
+  // eslint-disable-next-line qwik/no-use-visible-task
   useVisibleTask$(() => {
     const container = containerRef.value;
     if (!container) return;

@@ -6,8 +6,9 @@ import {
   useComputed$,
   $,
 } from "@builder.io/qwik";
-import { useWalletContext, truncateAddress } from "~/context/wallet-context";
+import { useWalletContext } from "~/context/wallet-context";
 import { useNetworkContext } from "~/context/network-context";
+import { truncateAddress } from "~/lib/store/wallet";
 
 // ────────────────────────────────────────────────
 // Types
@@ -103,8 +104,6 @@ interface NftItem {
 const XRPL_WS = "wss://xrplcluster.com";
 const XAHAU_WS = "wss://xahau.network";
 const FALLBACK_IMG = "https://placehold.co/400x400/eeeeee/999999?text=NFT";
-const PLACEHOLDER_IMG =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='%23e5e7eb'%3E%3Crect width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='48' fill='%239ca3af'%3ENFT%3C/text%3E%3C/svg%3E";
 
 const truncate = (v?: string) => (v ? `${v.slice(0, 6)}…${v.slice(-6)}` : "—");
 
@@ -119,49 +118,19 @@ const formatAmount = (amt: any, native: string) => {
 };
 
 // Get token icon from currency code
+import { parseCurrencyCode } from "~/lib/utils/hex";
 
 const getTokenIcon = (currency: string, issuer: string) => {
-  // Check if it's a hex currency code
-  if (currency.length === 40) {
-    try {
-      const decoded = Buffer.from(currency, "hex")
-        .toString("utf-8")
-        .replace(/\0/g, "");
-      currency = decoded;
-    } catch (e) {
-      console.error("Failed to decode currency:", e); // Log the error
-      // Keeps original currency if decode fails
-    }
-  }
-
-  // Use a token icon service or return a default icon
-  return `https://cdn.bithomp.com/issued-token/${issuer}/${currency}/.png/jpeg/icon`;
-};
-
-const formatDate = (dateInput?: string | number) => {
-  if (!dateInput) return "—";
-
-  let date: Date;
-  if (typeof dateInput === "number") {
-    // XRPL epoch (946684800 seconds between Unix and Ripple epoch)
-    date = new Date((dateInput + 946684800) * 1000);
-  } else {
-    date = new Date(dateInput);
-  }
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const year = date.getFullYear();
-
-  return `${month}/${day}/${year}`;
+  const parsedCurrency = parseCurrencyCode(currency);
+  return `https://cdn.bithomp.com/issued-token/${issuer}/${parsedCurrency}/.png/jpeg/icon`;
 };
 
 // ────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────
 export default component$(() => {
-  const wallet = useWalletContext();
-  const { activeNetwork } = useNetworkContext();
+  const walletCtx = useWalletContext();
+  const networkCtx = useNetworkContext();
 
   useStylesScoped$(`
     :root { --gap: 20px; }
@@ -572,7 +541,7 @@ export default component$(() => {
 
     try {
       const res = await fetch(
-        `/api/marketplace?network=${activeNetwork.value}&address=${address}&limit=100`,
+        `/api/marketplace?network=${networkCtx.activeNetwork.value}&address=${address}&limit=100`,
       );
 
       if (!res.ok) {
@@ -689,747 +658,788 @@ export default component$(() => {
     });
   });
 
-  // Paginated NFTs
+  // Pagination
   const paginated = useComputed$(() => {
     const start = (currentPage.value - 1) * pageSize;
     return filtered.value.slice(start, start + pageSize);
   });
 
-  // Unique collections
-  const collections = useComputed$(() => {
-    const cols = new Set<string>();
-    nfts.value.forEach((n) => {
-      if (n.collection) cols.add(n.collection);
-    });
-    return Array.from(cols).sort();
-  });
-
   const totalPages = useComputed$(() =>
-    Math.max(1, Math.ceil(filtered.value.length / pageSize)),
+    Math.ceil(filtered.value.length / pageSize),
   );
 
-  // NFT count by tab
-  const nftCounts = useComputed$(() => {
-    const owned = nfts.value.length;
-    const offersCreated = nfts.value.filter(
-      (nft) => nft.sellOffers && nft.sellOffers.length > 0,
-    ).length;
-    const offersReceived = nfts.value.filter(
-      (nft) => nft.buyOffers && nft.buyOffers.length > 0,
-    ).length;
-
-    return {
-      owned,
-      sold: 0, // Would need transaction history
-      offersCreated,
-      offersReceived,
-    };
-  });
-
   return (
-    <div class="page mt-20">
-      {/* Pill-shaped search bar - centered in middle initially */}
-      <div class={`hero-search ${debounced.value ? "moved" : ""}`}>
-        <input
-          class="pill-input"
-          placeholder="Paste account address…"
-          value={query.value}
-          onInput$={(e) => (query.value = (e.target as HTMLInputElement).value)}
-        />
+    <div class="page mt-16">
+      {/* ── SEARCH HERO ── */}
+      <div class={["hero-search", debounced.value && "moved"].join(" ")}>
+        {!debounced.value && (
+          <h1 class="text-center text-4xl md:text-5xl font-extrabold text-gray-900 mb-8 tracking-tight">
+            Explore the <span class="text-blue-600">Ledger</span>
+          </h1>
+        )}
+        <div class="relative max-w-2xl mx-auto">
+          <input
+            type="text"
+            class="pill-input pr-32"
+            placeholder="Enter r-address or domain..."
+            value={query.value}
+            onInput$={(e) =>
+              (query.value = (e.target as HTMLInputElement).value)
+            }
+          />
+          <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <select
+              value={network.value}
+              onChange$={(e) => {
+                const net = (e.target as HTMLSelectElement).value as
+                  | "xrpl"
+                  | "xahau";
+                network.value = net;
+                import("~/lib/store/network").then(({ networkActions }) => {
+                  networkActions.setActiveNetwork(net);
+                });
+              }}
+              class="bg-gray-100 border-none text-sm font-medium rounded-full px-4 py-2 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="xrpl">XRPL</option>
+              <option value="xahau">Xahau</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      {debounced.value && (
-        <div class="content loaded">
+      {/* ── RESULTS AREA ── */}
+      <div class={["content", debounced.value && "loaded"].join(" ")}>
+        {debounced.value && !account.value && !lines.value.length && (
+          <div class="py-20 flex flex-col items-center">
+            <div class="spinner"></div>
+            <p class="mt-6 text-gray-500 font-medium animate-pulse">
+              Scanning the ledger...
+            </p>
+          </div>
+        )}
+
+        {account.value && (
           <div class="bento">
-            {/* Account and Tokens - Square Cards Row */}
-            <div class="account-tokens-row">
-              {/* Account Information */}
-              <div class="card square-card">
-                <div class="header">Account Information</div>
-                <div class="body">
-                  {!account.value ? (
-                    <div class="flex items-center justify-center py-10">
-                      <div class="spinner" />
-                    </div>
-                  ) : (
-                    <div>
-                      {account.value.urlgravatar && (
-                        <img
-                          src={account.value.urlgravatar}
-                          alt="Avatar"
-                          width={100}
-                          height={100}
-                          style={{
-                            borderRadius: "50%",
-                            marginBottom: "1rem",
-                            display: "block",
-                          }}
-                        />
-                      )}
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
+            {/* Account Card */}
+            <div class="card p-6 md:p-8 bg-linear-to-br from-blue-50 to-white">
+              <div class="flex items-center gap-4 mb-6">
+                <div class="w-16 h-16 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600">
+                  <svg
+                    class="w-8 h-8"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="text-2xl font-bold text-gray-900 break-all">
+                    {account.value.Account}
+                  </h2>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {network.value.toUpperCase()}
+                    </span>
+                    {account.value.Domain && (
+                      <a
+                        href={`https://${Buffer.from(account.value.Domain, "hex").toString()}`}
+                        target="_blank"
+                        rel="noopener"
+                        class="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <svg
+                          class="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          ACCOUNT
-                        </strong>
-                        <span
-                          style={{
-                            fontSize: "0.8125rem",
-                            wordBreak: "break-all",
-                            display: "block",
-                          }}
-                        >
-                          {account.value.Account}
-                        </span>
-                      </div>
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          BALANCE
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {formatAmount(
-                            account.value.Balance,
-                            network.value === "xrpl" ? "XRP" : "XAH",
-                          )}
-                        </span>
-                      </div>
-
-                      {account.value.Domain && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            DOMAIN
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.875rem",
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            {account.value.Domain}
-                          </span>
-                        </div>
-                      )}
-
-                      {account.value.EmailHash && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            EMAIL HASH
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.875rem",
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            {account.value.EmailHash}
-                          </span>
-                        </div>
-                      )}
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          FLAGS
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {account.value.Flags}
-                        </span>
-                      </div>
-
-                      {account.value.LedgerEntryType && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            LEDGER ENTRY TYPE
-                          </strong>
-                          <span style={{ fontSize: "0.875rem" }}>
-                            {account.value.LedgerEntryType}
-                          </span>
-                        </div>
-                      )}
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          OWNER COUNT
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {account.value.OwnerCount}
-                        </span>
-                      </div>
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          PREVIOUS TXN ID
-                        </strong>
-                        <span
-                          style={{
-                            fontSize: "0.8125rem",
-                            wordBreak: "break-all",
-                            display: "block",
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          {truncate(account.value.PreviousTxnID)}
-                        </span>
-                      </div>
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          PREVIOUS TXN LEDGER SEQ
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {account.value.PreviousTxnLgrSeq}
-                        </span>
-                      </div>
-
-                      {account.value.RegularKey && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            REGULAR KEY
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.8125rem",
-                              wordBreak: "break-all",
-                              display: "block",
-                              fontFamily: "monospace",
-                            }}
-                          >
-                            {account.value.RegularKey}
-                          </span>
-                        </div>
-                      )}
-
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <strong
-                          style={{
-                            color: "#6b7280",
-                            fontSize: "0.75rem",
-                            display: "block",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          SEQUENCE
-                        </strong>
-                        <span style={{ fontSize: "0.875rem" }}>
-                          {account.value.Sequence}
-                        </span>
-                      </div>
-
-                      {account.value.index && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <strong
-                            style={{
-                              color: "#6b7280",
-                              fontSize: "0.75rem",
-                              display: "block",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            INDEX
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: "0.8125rem",
-                              wordBreak: "break-all",
-                              display: "block",
-                              fontFamily: "monospace",
-                            }}
-                          >
-                            {truncate(account.value.index)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                          />
+                        </svg>
+                        {Buffer.from(account.value.Domain, "hex").toString()}
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Tokens & Trustlines */}
-              <div class="card square-card">
-                <div class="header">
-                  {!account.value ? (
-                    "TOKENS"
-                  ) : (
-                    <>
-                      {lines.value.length} TOKENS{" "}
-                      {wallet.connected.value && (
-                        <a
-                          href="#"
-                          style={{ color: "#3b82f6", fontSize: "0.75rem" }}
-                        >
-                          [SIGN IN]
-                        </a>
-                      )}
-                    </>
-                  )}
+              <div class="grid grid-cols-2 gap-4">
+                <div class="bg-white rounded-xl p-4 border border-blue-100 shadow-sm">
+                  <p class="text-sm text-gray-500 font-medium mb-1">Balance</p>
+                  <p class="text-2xl font-bold text-gray-900">
+                    {(Number(account.value.Balance) / 1_000_000).toLocaleString(
+                      undefined,
+                      { maximumFractionDigits: 2 },
+                    )}
+                    <span class="text-base font-medium text-gray-500 ml-1">
+                      {network.value === "xrpl" ? "XRP" : "XAH"}
+                    </span>
+                  </p>
                 </div>
-                <div class="body">
-                  {!account.value ? (
-                    <div class="flex items-center justify-center py-10">
-                      <div class="spinner" />
-                    </div>
-                  ) : lines.value.length === 0 ? (
-                    <div>No tokens or trustlines</div>
-                  ) : (
-                    lines.value.map((l, i) => (
-                      <div key={i} class="token-item">
-                        <img
-                          height={100}
-                          width={100}
-                          src={l.icon || FALLBACK_IMG}
-                          alt={l.currency}
-                          class="token-icon"
-                          onError$={(e: any) => {
-                            e.target.src = FALLBACK_IMG;
-                          }}
-                        />
-                        <div class="token-info">
-                          <div class="token-currency">{l.currency}</div>
-                          <div class="token-issuer">{truncate(l.peer)}</div>
-                        </div>
-                        <div class="token-balance">
-                          {Number(l.balance).toLocaleString(undefined, {
-                            maximumFractionDigits: 2,
-                          })}
-                        </div>
-                      </div>
-                    ))
-                  )}
+                <div class="bg-white rounded-xl p-4 border border-blue-100 shadow-sm">
+                  <p class="text-sm text-gray-500 font-medium mb-1">Sequence</p>
+                  <p class="text-2xl font-bold text-gray-900">
+                    {account.value.Sequence.toLocaleString()}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Transaction History - full width */}
-            <div class="card txs" style={{ gridColumn: "1 / -1" }}>
-              <div class="header">
-                {!account.value ? (
-                  "TRANSACTIONS"
+            {/* Tokens Card */}
+            <div class="card square-card">
+              <div class="header flex justify-between items-center bg-white border-b-0 pb-0 pt-6">
+                <span class="text-lg text-gray-900">Assets</span>
+                <span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
+                  {lines.value.length} Total
+                </span>
+              </div>
+              <div class="body pt-4">
+                {lines.value.length > 0 ? (
+                  lines.value.map((l, i) => (
+                    <div key={i} class="token-item hover:bg-gray-50 transition">
+                      <img
+                        src={l.icon}
+                        alt=""
+                        width={24}
+                        height={24}
+                        class="token-icon"
+                        onError$={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239ca3af'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/%3E%3C/svg%3E";
+                        }}
+                      />
+                      <div class="token-info">
+                        <div class="flex justify-between items-baseline">
+                          <p class="token-currency truncate">
+                            {(() => {
+                              let c = l.currency;
+                              if (c.length === 40) {
+                                try {
+                                  c = Buffer.from(c, "hex")
+                                    .toString()
+                                    .replace(/\0/g, "");
+                                } catch {
+                                  /* ignore */
+                                }
+                              }
+                              return c;
+                            })()}
+                          </p>
+                          <p class="token-balance">
+                            {Number(l.balance).toLocaleString(undefined, {
+                              maximumFractionDigits: 4,
+                            })}
+                          </p>
+                        </div>
+                        <p class="token-issuer">{truncate(l.peer)}</p>
+                      </div>
+                    </div>
+                  ))
                 ) : (
-                  <>
-                    LAST {txs.value.length} TRANSACTIONS{" "}
-                    <a
-                      href="#"
-                      style={{ color: "#3b82f6", fontSize: "0.75rem" }}
-                    >
-                      [VIEW ALL]
-                    </a>
-                  </>
+                  <div class="h-full flex items-center justify-center text-gray-400 text-sm">
+                    No tokens found
+                  </div>
                 )}
               </div>
+            </div>
+
+            {/* Transactions Card */}
+            <div class="card txs account-tokens-row">
+              <div class="header bg-white pt-6 border-b-0">
+                <span class="text-lg text-gray-900">Recent Activity</span>
+              </div>
               <div class="body">
-                {!account.value ? (
-                  <div
-                    style={{
-                      padding: "1.5rem",
-                      textAlign: "center",
-                      color: "#6b7280",
-                    }}
-                  >
-                    <div class="flex items-center justify-center py-10">
-                      <div class="spinner" />
-                    </div>
-                  </div>
-                ) : txs.value.length === 0 ? (
-                  <div
-                    style={{
-                      padding: "1.5rem",
-                      textAlign: "center",
-                      color: "#6b7280",
-                    }}
-                  >
-                    No recent transactions
-                  </div>
-                ) : (
+                {txs.value.length > 0 ? (
                   <table class="tx-table">
                     <thead>
                       <tr>
-                        <th>Status</th>
-                        <th>Validated</th>
                         <th>Type</th>
-                        <th>Hash</th>
-                        <th>Changes</th>
+                        <th>Status</th>
+                        <th>Details</th>
+                        <th class="text-right">Hash</th>
                       </tr>
                     </thead>
                     <tbody>
                       {txs.value.map((t, i) => (
                         <tr key={i}>
                           <td>
-                            <span class="tx-status">✓</span>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              {t.TransactionType}
+                            </span>
                           </td>
-                          <td>{formatDate(t.date)}</td>
-                          <td class="tx-type">{t.TransactionType}</td>
                           <td>
-                            <a
-                              href={`https://${network.value === "xrpl" ? "livenet" : "xahau"}.xrpl.org/transactions/${t.hash}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              class="tx-hash"
+                            <span
+                              class={
+                                t.meta?.TransactionResult === "tesSUCCESS"
+                                  ? "text-emerald-600 font-medium"
+                                  : "text-red-500 font-medium"
+                              }
                             >
-                              {truncate(t.hash)}
-                            </a>
+                              {t.meta?.TransactionResult === "tesSUCCESS"
+                                ? "Success"
+                                : "Failed"}
+                            </span>
                           </td>
                           <td>
-                            {t.TransactionType === "NFTokenAcceptOffer" &&
-                              t.NFTokenID && (
-                                <div class="tx-nft-added">
-                                  NFT added: {truncate(t.NFTokenID)}
-                                </div>
-                              )}
-                            {t.Amount && (
+                            {t.TransactionType === "Payment" && (
                               <span
                                 class={
-                                  t.Account === debounced.value
-                                    ? "tx-change-negative"
-                                    : "tx-change-positive"
+                                  t.Account === account.value?.Account
+                                    ? "text-red-500"
+                                    : "text-emerald-600"
                                 }
                               >
-                                {t.Account === debounced.value ? "-" : "+"}
+                                {t.Account === account.value?.Account
+                                  ? "-"
+                                  : "+"}
                                 {formatAmount(
                                   t.Amount,
                                   network.value === "xrpl" ? "XRP" : "XAH",
                                 )}
                               </span>
                             )}
+                            {t.TransactionType === "NFTokenMint" && (
+                              <span class="text-blue-600 text-xs font-medium flex items-center gap-1">
+                                <svg
+                                  class="w-3 h-3"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4z" />
+                                  <path
+                                    fill-rule="evenodd"
+                                    d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z"
+                                    clip-rule="evenodd"
+                                  />
+                                </svg>
+                                Minted
+                              </span>
+                            )}
+                          </td>
+                          <td class="text-right">
+                            <a
+                              href={
+                                network.value === "xrpl"
+                                  ? `https://livenet.xrpl.org/transactions/${t.hash}`
+                                  : `https://explorer.xahau.network/tx/${t.hash}`
+                              }
+                              target="_blank"
+                              class="text-blue-600 hover:text-blue-800 hover:underline font-mono text-xs"
+                            >
+                              {truncate(t.hash)}
+                            </a>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                ) : (
+                  <div class="p-8 text-center text-gray-500">
+                    No recent transactions
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* NFTs Card - full width with tabs, filtering and pagination */}
-            <div class="card nft-card-wrapper">
-              <div class="header">
-                {nftCounts.value.owned} OWNED NFTS{" "}
-                <a href="#" style={{ color: "#3b82f6", fontSize: "0.75rem" }}>
-                  [VIEW ALL]
-                </a>
+            {/* Complete NFT Portfolio Redesign */}
+            <div class="card nft-card-wrapper mt-6 shadow-md border-gray-200">
+              <div class="header bg-white px-6 py-5 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 class="text-xl font-bold text-gray-900">NFT Portfolio</h3>
+                  <p class="text-sm text-gray-500 mt-1">
+                    {marketData.value?.totalNfts || 0} Assets •{" "}
+                    {marketData.value?.listedCount || 0} Listed
+                  </p>
+                </div>
+
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                  <div class="relative flex-1 sm:w-64">
+                    <svg
+                      class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search NFTs..."
+                      value={searchQuery.value}
+                      onInput$={(e) => {
+                        searchQuery.value = (
+                          e.target as HTMLInputElement
+                        ).value;
+                        currentPage.value = 1;
+                      }}
+                      class="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
+                    />
+                  </div>
+                  <button
+                    class="p-2 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100 transition-colors"
+                    title="Refresh Portfolio"
+                    onClick$={() => {
+                      if (account.value) fetchNfts(account.value.Account);
+                    }}
+                  >
+                    <svg
+                      class={["w-4 h-4", loading.value && "animate-spin"].join(
+                        " ",
+                      )}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
 
-              {/* NFT Tabs */}
+              {/* Enhanced Tabs */}
               <div class="nft-tabs">
                 <button
-                  class={`nft-tab ${nftTab.value === "owned" ? "active" : ""}`}
+                  class={["nft-tab", nftTab.value === "owned" && "active"].join(
+                    " ",
+                  )}
                   onClick$={() => {
                     nftTab.value = "owned";
                     currentPage.value = 1;
                   }}
                 >
-                  Owned ({nftCounts.value.owned})
+                  Owned ({marketData.value?.totalNfts || 0})
                 </button>
                 <button
-                  class={`nft-tab ${nftTab.value === "sold" ? "active" : ""}`}
-                  onClick$={() => {
-                    nftTab.value = "sold";
-                    currentPage.value = 1;
-                  }}
-                >
-                  Sold ({nftCounts.value.sold})
-                </button>
-                <button
-                  class={`nft-tab ${nftTab.value === "offers-created" ? "active" : ""}`}
+                  class={[
+                    "nft-tab",
+                    nftTab.value === "offers-created" && "active",
+                  ].join(" ")}
                   onClick$={() => {
                     nftTab.value = "offers-created";
                     currentPage.value = 1;
                   }}
                 >
-                  Offers Created ({nftCounts.value.offersCreated})
+                  Listed ({marketData.value?.listedCount || 0})
                 </button>
                 <button
-                  class={`nft-tab ${nftTab.value === "offers-received" ? "active" : ""}`}
+                  class={[
+                    "nft-tab",
+                    nftTab.value === "offers-received" && "active",
+                  ].join(" ")}
                   onClick$={() => {
                     nftTab.value = "offers-received";
                     currentPage.value = 1;
                   }}
                 >
-                  Offers Received ({nftCounts.value.offersReceived})
+                  Offers Received
+                </button>
+                <button
+                  class={["nft-tab", nftTab.value === "sold" && "active"].join(
+                    " ",
+                  )}
+                  onClick$={() => {
+                    nftTab.value = "sold";
+                    currentPage.value = 1;
+                  }}
+                >
+                  Activity
                 </button>
               </div>
 
-              {/* Filters */}
-              {nfts.value.length > 0 && (
-                <div class="flex flex-col sm:flex-row gap-3 mb-6 px-6 pt-4">
-                  <input
-                    type="text"
-                    placeholder="Filter by name, collection, ID..."
-                    class="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    value={searchQuery.value}
-                    onInput$={(e) =>
-                      (searchQuery.value = (e.target as HTMLInputElement).value)
-                    }
-                  />
-                  {collections.value.length > 0 && (
-                    <select
-                      class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      value={selectedCollection.value || ""}
-                      onChange$={(e) =>
-                        (selectedCollection.value =
-                          (e.target as HTMLSelectElement).value || null)
-                      }
-                    >
-                      <option value="">All Collections</option>
-                      {collections.value.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {(searchQuery.value || selectedCollection.value) && (
-                    <button
-                      class="px-4 py-2.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition"
-                      onClick$={() => {
-                        searchQuery.value = "";
-                        selectedCollection.value = null;
-                      }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Loading */}
-              {loading.value && (
-                <div class="flex items-center justify-center py-20">
-                  <div class="spinner" />
-                  <span class="ml-4 text-gray-500">
-                    Fetching NFTs from the ledger...
-                  </span>
-                </div>
-              )}
-
-              {/* Scrollable NFT Body */}
-              {!loading.value && paginated.value.length > 0 && (
-                <div class="nft-scroll-body">
-                  <div class="nft-grid">
-                    {paginated.value.map((nft) => (
-                      <div
-                        key={nft.nftokenId}
-                        class="nft-item"
-                        onClick$={() => (selectedNft.value = nft)}
-                      >
-                        <div class="nft-image-wrapper">
-                          <img
-                            src={nft.image || PLACEHOLDER_IMG}
-                            alt={nft.name}
-                            width={200}
-                            height={200}
-                            loading="eager"
-                            decoding="async"
-                            onError$={(e: any) => {
-                              e.target.src = PLACEHOLDER_IMG;
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+              {/* Grid View */}
+              <div class="nft-scroll-body bg-gray-50/50">
+                {loading.value ? (
+                  <div class="flex flex-col justify-center items-center py-20">
+                    <div class="spinner border-blue-500"></div>
+                    <p class="mt-4 text-gray-500 font-medium">
+                      Loading assets...
+                    </p>
                   </div>
-                </div>
-              )}
+                ) : filtered.value.length > 0 ? (
+                  <>
+                    <div class="nft-grid">
+                      {paginated.value.map((nft) => (
+                        <div
+                          key={nft.nftokenId}
+                          class="nft-item group"
+                          onClick$={() => {
+                            selectedNft.value = nft;
+                          }}
+                        >
+                          <div class="nft-image-wrapper">
+                            <img
+                              src={nft.image || FALLBACK_IMG}
+                              alt={nft.name}
+                              width={400}
+                              height={400}
+                              loading="lazy"
+                              onError$={(e) => {
+                                (e.target as HTMLImageElement).src =
+                                  FALLBACK_IMG;
+                              }}
+                            />
+                            {/* Badges Overlay */}
+                            <div class="absolute top-2 left-2 flex flex-col gap-1">
+                              {nft.sellOffers && nft.sellOffers.length > 0 && (
+                                <span class="bg-blue-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                                  Listed:{" "}
+                                  {formatAmount(
+                                    nft.sellOffers[0].amount,
+                                    network.value === "xrpl" ? "XRP" : "XAH",
+                                  )}
+                                </span>
+                              )}
+                              {nft.buyOffers && nft.buyOffers.length > 0 && (
+                                <span class="bg-emerald-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                                  Top Offer:{" "}
+                                  {formatAmount(
+                                    nft.buyOffers[0].amount,
+                                    network.value === "xrpl" ? "XRP" : "XAH",
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            {/* Transfer fee badge */}
+                            {nft.transferFee > 0 && (
+                              <div class="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded">
+                                {(nft.transferFee / 1000).toFixed(1)}% Royalty
+                              </div>
+                            )}
+                          </div>
+                          <div class="p-4 bg-white">
+                            <div class="text-xs text-blue-600 font-medium mb-1 truncate">
+                              {nft.collection}
+                            </div>
+                            <h4 class="font-bold text-gray-900 text-sm truncate mb-2">
+                              {nft.name}
+                            </h4>
+                            <div class="flex justify-between items-center text-xs">
+                              <span class="text-gray-500 font-mono">
+                                #{nft.serial}
+                              </span>
+                              <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px]">
+                                Taxon {nft.taxon}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
-              {/* Empty state */}
-              {!loading.value &&
-                filtered.value.length === 0 &&
-                nfts.value.length === 0 && (
-                  <div class="text-center py-20 text-gray-400">
-                    <div class="text-6xl mb-4">🖼️</div>
-                    <p class="text-lg">
-                      {nftTab.value === "owned" && "This account has no NFTs"}
-                      {nftTab.value === "sold" && "No sold NFTs found"}
-                      {nftTab.value === "offers-created" &&
-                        "No sell offers created"}
-                      {nftTab.value === "offers-received" &&
-                        "No buy offers received"}
+                    {/* Pagination Controls */}
+                    {totalPages.value > 1 && (
+                      <div class="mt-8 flex justify-center items-center gap-4">
+                        <button
+                          class="px-4 py-2 border rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-gray-50"
+                          disabled={currentPage.value === 1}
+                          onClick$={() => currentPage.value--}
+                        >
+                          Previous
+                        </button>
+                        <span class="text-sm text-gray-600 font-medium">
+                          Page {currentPage.value} of {totalPages.value}
+                        </span>
+                        <button
+                          class="px-4 py-2 border rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-gray-50"
+                          disabled={currentPage.value === totalPages.value}
+                          onClick$={() => currentPage.value++}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div class="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                    <svg
+                      class="w-16 h-16 text-gray-300 mx-auto mb-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.5"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <p class="text-gray-500 text-lg font-medium">
+                      No NFTs found
+                    </p>
+                    <p class="text-gray-400 text-sm mt-1">
+                      {searchQuery.value
+                        ? "Try adjusting your search filters."
+                        : "This account doesn't own any matching assets."}
                     </p>
                   </div>
                 )}
-
-              {!loading.value &&
-                filtered.value.length === 0 &&
-                nfts.value.length > 0 && (
-                  <div class="text-center py-20 text-gray-400">
-                    <div class="text-6xl mb-4">🔍</div>
-                    <p class="text-lg">No NFTs match your filters</p>
-                  </div>
-                )}
-
-              {/* Pagination */}
-              {totalPages.value > 1 && (
-                <div class="flex justify-center items-center gap-4 mt-6 pb-4">
-                  <button
-                    class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    disabled={currentPage.value <= 1}
-                    onClick$={() => currentPage.value--}
-                  >
-                    ← Previous
-                  </button>
-                  <span class="text-sm font-semibold text-gray-700">
-                    {currentPage.value} / {totalPages.value}
-                  </span>
-                  <button
-                    class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    disabled={currentPage.value >= totalPages.value}
-                    onClick$={() => currentPage.value++}
-                  >
-                    Next →
-                  </button>
-                </div>
-              )}
+              </div>
             </div>
 
-            {/* NFT Detail Modal */}
+            {/* ── NFT Details Modal ── */}
             {selectedNft.value && (
-              <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                <div class="max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-200 shadow-2xl">
-                  <div class="relative">
-                    <button
-                      class="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 text-gray-700 hover:bg-white transition shadow"
-                      onClick$={() => {
-                        selectedNft.value = null;
-                        showOfferModal.value = false;
-                        offerAmount.value = "";
-                      }}
+              <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div
+                  class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+                  onClick$={() => {
+                    selectedNft.value = null;
+                    showOfferModal.value = false;
+                  }}
+                />
+                <div class="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row">
+                  {/* Close button */}
+                  <button
+                    class="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 hover:bg-black/20 text-gray-800 transition-colors"
+                    onClick$={() => {
+                      selectedNft.value = null;
+                      showOfferModal.value = false;
+                    }}
+                  >
+                    <svg
+                      class="w-5 h-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
                     >
-                      ✕
-                    </button>
+                      <path
+                        fill-rule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </button>
+
+                  {/* Left side: Image */}
+                  <div class="w-full md:w-1/2 bg-gray-50 flex items-center justify-center p-8 border-r">
                     <img
-                      src={selectedNft.value.image || PLACEHOLDER_IMG}
-                      alt={selectedNft.value.name}
+                      src={selectedNft.value.image || FALLBACK_IMG}
                       width={600}
                       height={600}
-                      class="w-full aspect-square object-cover"
-                      onError$={(e: any) => {
-                        e.target.src = PLACEHOLDER_IMG;
+                      class="max-w-full max-h-[50vh] md:max-h-[80vh] object-contain rounded-lg shadow-lg"
+                      alt={selectedNft.value.name}
+                      onError$={(e) => {
+                        (e.target as HTMLImageElement).src = FALLBACK_IMG;
                       }}
                     />
                   </div>
-                  <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-900">
-                      {selectedNft.value.name}
-                    </h2>
-                    {selectedNft.value.collection && (
-                      <p class="text-sm text-blue-600 font-medium mt-1">
-                        {selectedNft.value.collection}
-                      </p>
-                    )}
-                    {selectedNft.value.description && (
-                      <p class="text-sm text-gray-600 mt-2">
-                        {selectedNft.value.description}
-                      </p>
-                    )}
 
-                    <div class="grid grid-cols-2 gap-3 mt-4">
-                      <div class="bg-gray-50 rounded-xl p-3">
-                        <div class="text-xs text-gray-500">Owner</div>
-                        <div class="text-sm font-mono font-medium truncate">
-                          {truncateAddress(selectedNft.value.owner)}
+                  {/* Right side: Details */}
+                  <div class="w-full md:w-1/2 flex flex-col h-full max-h-[50vh] md:max-h-[90vh]">
+                    <div class="p-6 md:p-8 flex-1 overflow-y-auto">
+                      <div class="text-sm font-bold text-blue-600 mb-2 uppercase tracking-wide">
+                        {selectedNft.value.collection}
+                      </div>
+                      <h2 class="text-3xl font-extrabold text-gray-900 mb-6 leading-tight">
+                        {selectedNft.value.name}
+                      </h2>
+
+                      <div class="grid grid-cols-2 gap-4 mb-8">
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                          <p class="text-xs text-gray-500 uppercase font-semibold mb-1">
+                            Owner
+                          </p>
+                          <p class="font-mono text-sm text-gray-900 break-all">
+                            {truncateAddress(selectedNft.value.owner)}
+                          </p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                          <p class="text-xs text-gray-500 uppercase font-semibold mb-1">
+                            Issuer
+                          </p>
+                          <p class="font-mono text-sm text-gray-900 break-all">
+                            {truncateAddress(selectedNft.value.issuer)}
+                          </p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                          <p class="text-xs text-gray-500 uppercase font-semibold mb-1">
+                            Taxon
+                          </p>
+                          <p class="font-semibold text-gray-900">
+                            {selectedNft.value.taxon}
+                          </p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                          <p class="text-xs text-gray-500 uppercase font-semibold mb-1">
+                            Royalty
+                          </p>
+                          <p class="font-semibold text-gray-900">
+                            {(selectedNft.value.transferFee / 1000).toFixed(1)}%
+                          </p>
                         </div>
                       </div>
-                      <div class="bg-gray-50 rounded-xl p-3">
-                        <div class="text-xs text-gray-500">Issuer</div>
-                        <div class="text-sm font-mono font-medium truncate">
-                          {truncateAddress(selectedNft.value.issuer)}
-                        </div>
+
+                      {/* Offers Section */}
+                      <div class="mb-6">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                          <svg
+                            class="w-5 h-5 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                            />
+                          </svg>
+                          Active Listings
+                        </h3>
+                        {selectedNft.value.sellOffers?.length > 0 ? (
+                          <div class="space-y-3">
+                            {selectedNft.value.sellOffers.map((offer, idx) => (
+                              <div
+                                key={idx}
+                                class="flex items-center justify-between p-4 rounded-xl border border-blue-100 bg-blue-50/50"
+                              >
+                                <div>
+                                  <p class="text-2xl font-bold text-blue-600">
+                                    {formatAmount(
+                                      offer.amount,
+                                      network.value === "xrpl" ? "XRP" : "XAH",
+                                    )}
+                                  </p>
+                                  <p class="text-xs text-gray-500 mt-1">
+                                    Listed by {truncate(offer.owner)}
+                                  </p>
+                                </div>
+                                <button class="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-sm transition-all transform hover:-translate-y-0.5">
+                                  Buy Now
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div class="bg-gray-50 rounded-xl p-4 text-center border border-gray-100">
+                            <p class="text-gray-500 text-sm">
+                              Not currently listed for sale
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <div class="bg-gray-50 rounded-xl p-3">
-                        <div class="text-xs text-gray-500">Transfer Fee</div>
-                        <div class="text-sm font-medium">
-                          {selectedNft.value.transferFee / 1000}%
-                        </div>
-                      </div>
-                      <div class="bg-gray-50 rounded-xl p-3">
-                        <div class="text-xs text-gray-500">Taxon</div>
-                        <div class="text-sm font-medium">
-                          {selectedNft.value.taxon}
+
+                      {/* Token ID */}
+                      <div class="mt-8 pt-6 border-t border-gray-100">
+                        <p class="text-xs text-gray-500 uppercase font-semibold mb-2">
+                          Token ID
+                        </p>
+                        <div class="bg-gray-100 p-3 rounded-lg flex items-center justify-between">
+                          <code class="text-xs text-gray-600 break-all select-all">
+                            {selectedNft.value.nftokenId}
+                          </code>
+                          <button
+                            class="ml-3 p-1.5 hover:bg-gray-200 rounded text-gray-500 transition-colors"
+                            onClick$={() =>
+                              navigator.clipboard.writeText(
+                                selectedNft.value!.nftokenId,
+                              )
+                            }
+                            title="Copy ID"
+                          >
+                            <svg
+                              class="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                              />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     </div>
 
-                    <div class="mt-3 bg-gray-50 rounded-xl p-3">
-                      <div class="text-xs text-gray-500 mb-1">NFToken ID</div>
-                      <div class="text-xs font-mono break-all text-gray-700">
-                        {selectedNft.value.nftokenId}
-                      </div>
+                    {/* Action Footer */}
+                    <div class="p-6 border-t bg-gray-50 rounded-br-2xl flex gap-3">
+                      {walletCtx.connected.value && (
+                        <button
+                          class="flex-1 px-4 py-3 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 shadow-sm transition-colors"
+                          onClick$={() => (showOfferModal.value = true)}
+                        >
+                          Make Offer
+                        </button>
+                      )}
+                      {walletCtx.connected.value &&
+                        selectedNft.value.owner === account.value?.Account && (
+                          <button class="flex-1 px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 shadow-sm transition-colors">
+                            List for Sale
+                          </button>
+                        )}
                     </div>
                   </div>
                 </div>
+
+                {/* nested Make Offer modal */}
+                {showOfferModal.value && (
+                  <div class="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                      <button
+                        class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                        onClick$={() => (showOfferModal.value = false)}
+                      >
+                        ✕
+                      </button>
+                      <h3 class="text-xl font-bold mb-4">Make an Offer</h3>
+                      <p class="text-sm text-gray-500 mb-4">
+                        Enter the amount you want to offer for "
+                        {selectedNft.value.name}".
+                      </p>
+
+                      <div class="relative mb-6">
+                        <input
+                          type="number"
+                          value={offerAmount.value}
+                          onInput$={(e) =>
+                            (offerAmount.value = (
+                              e.target as HTMLInputElement
+                            ).value)
+                          }
+                          class="w-full text-2xl font-bold p-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 pr-16"
+                          placeholder="0.00"
+                        />
+                        <div class="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">
+                          {network.value === "xrpl" ? "XRP" : "XAH"}
+                        </div>
+                      </div>
+
+                      <button class="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-all active:scale-95 disabled:opacity-50">
+                        Sign Offer
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 });

@@ -1069,55 +1069,42 @@ export default component$(() => {
             interaction across XRP Ledger and Xahau — all wallets, one platform.
           </p>
 
-          <div class="hero-price inline-flex flex-col sm:flex-row items-center gap-6 sm:gap-10 bg-white/70 backdrop-blur-xl border border-gray-200/80 rounded-2xl px-8 py-6 shadow-lg shadow-gray-200/50">
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-full bg-gray-900 flex items-center justify-center shadow-lg">
-                <svg viewBox="0 0 100 100" class="w-7 h-7" fill="none">
-                  <path
-                    d="M25 22L50 40M75 22L50 40M25 78L50 60M75 78L50 60"
-                    stroke="white"
-                    stroke-width="6"
-                    stroke-linecap="round"
-                  />
-                </svg>
+          <div class="max-w-5xl mx-auto">
+            <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-10 tracking-tight">
+              How It Works
+            </h3>
+            <div class="grid sm:grid-cols-3 gap-6">
+              <div class="hero-badge group bg-white/70 backdrop-blur-xl border border-gray-200/80 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300">
+                <div class="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <span class="text-2xl">🔗</span>
+                </div>
+                <h4 class="font-bold text-gray-900 mb-2 text-lg">1. Connect</h4>
+                <p class="text-sm text-gray-500 leading-relaxed font-light">
+                  Link your wallet (Xaman, GemWallet, Crossmark, or Ledger) to
+                  access both XRPL and Xahau networks instantly.
+                </p>
               </div>
-              <div class="text-left">
-                <div class="text-xs text-gray-400 font-medium uppercase tracking-wider">
-                  XRP / USD
+              <div class="hero-badge group bg-white/70 backdrop-blur-xl border border-gray-200/80 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300">
+                <div class="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <span class="text-2xl">⚡</span>
                 </div>
-                <div class="flex items-baseline gap-2">
-                  <span class="text-3xl font-bold text-gray-900 tabular-nums">
-                    ${xrpPrice.value.toFixed(4)}
-                  </span>
-                  <span
-                    class={`text-sm font-semibold ${xrpChange.value >= 0 ? "text-green-500" : "text-red-500"}`}
-                  >
-                    {xrpChange.value >= 0 ? "+" : ""}
-                    {xrpChange.value.toFixed(4)}%
-                  </span>
-                </div>
+                <h4 class="font-bold text-gray-900 mb-2 text-lg">
+                  2. Interact
+                </h4>
+                <p class="text-sm text-gray-500 leading-relaxed font-light">
+                  Trade on the DEX, mint NFTs, issue tokens, or deploy Hooks -
+                  all through clear, explicit transaction flows.
+                </p>
               </div>
-            </div>
-            <div class="hidden sm:block w-px h-12 bg-gray-200" />
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-full bg-linear-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-                <span class="text-white font-bold text-lg">X</span>
-              </div>
-              <div class="text-left">
-                <div class="text-xs text-gray-400 font-medium uppercase tracking-wider">
-                  XAH / USD
+              <div class="hero-badge group bg-white/70 backdrop-blur-xl border border-gray-200/80 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300">
+                <div class="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <span class="text-2xl">✅</span>
                 </div>
-                <div class="flex items-baseline gap-2">
-                  <span class="text-3xl font-bold text-gray-900 tabular-nums">
-                    ${xahauPrice.value.toFixed(4)}
-                  </span>
-                  <span
-                    class={`text-sm font-semibold ${xahauChange.value >= 0 ? "text-green-500" : "text-red-500"}`}
-                  >
-                    {xahauChange.value >= 0 ? "+" : ""}
-                    {xahauChange.value.toFixed(4)}%
-                  </span>
-                </div>
+                <h4 class="font-bold text-gray-900 mb-2 text-lg">3. Verify</h4>
+                <p class="text-sm text-gray-500 leading-relaxed font-light">
+                  Review every action before signing. Full transparency means
+                  you always know exactly what you're approving.
+                </p>
               </div>
             </div>
           </div>

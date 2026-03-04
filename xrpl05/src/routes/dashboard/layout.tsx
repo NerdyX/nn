@@ -5,12 +5,12 @@ import {
   NETWORK_CONFIG,
   getSidebarNavItems,
   SIDEBAR_ICONS,
-} from "~/context/network-context";
+} from "~/hooks/useNetwork";
 import {
   useWalletContext,
   truncateAddress,
   clearWalletSession,
-} from "~/context/wallet-context";
+} from "~/hooks/useWallet";
 
 import "./dashboard.css";
 

@@ -7,8 +7,14 @@ import {
   useWalletContext,
   truncateAddress,
   clearWalletSession,
+<<<<<<< Updated upstream
   persistWalletSession, // FIX #4: single source of truth — no longer re-imported inside connectGutteWallet
 } from "~/context/wallet-context";
+=======
+  persistWalletSession,
+} from "../../hooks/useWallet";
+import { useContext } from "@builder.io/qwik";
+>>>>>>> Stashed changes
 
 interface HeaderProps {
   transparent?: boolean;

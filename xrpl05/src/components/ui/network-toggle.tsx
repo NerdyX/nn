@@ -29,7 +29,7 @@ export default component$(() => {
 
         <div
           class={[
-            "group relative h-9 w-[4.5rem] rounded-full shadow ring-0 duration-300",
+            "group relative h-9 w-4.5rem rounded-full shadow ring-0 duration-300",
             "after:absolute after:left-1 after:top-0.5 after:flex after:h-8 after:w-8",
             "after:items-center after:justify-center after:rounded-full after:bg-gray-50",
             "after:content-[''] after:duration-300 peer-hover:after:scale-95",

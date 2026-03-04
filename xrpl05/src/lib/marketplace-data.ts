@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import type { D1Database } from "@cloudflare/workers-types";
 import {
   cacheKey,
@@ -14,6 +15,29 @@ const NETWORK_NODES = {
     "https://s2.ripple.com",
   ],
   xahau: ["https://xahau.network"],
+=======
+// src/lib/marketplace-data.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared marketplace data layer — used by both the API route and routeLoader$.
+// Fully aligned with /api/marketplace/index.tsx (enhanced account summary)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { cachedFetch, cacheKey, writeCache } from "~/lib/cache/d1-cache";
+
+// ─── Network config ───────────────────────────────────────────────────────────
+export const NETWORK_NODES: Record<string, string[]> = {
+  xrpl: [
+    "https://xrplcluster.com",
+    "https://s1.ripple.com:51234",
+    "https://s2.ripple.com:51234",
+    "https://xrpl.ws",
+  ],
+  xahau: [
+    "https://xahau.network",
+    "https://xahau.org",
+    "https://xahau-rpc.xrpl-labs.com",
+  ],
+>>>>>>> Stashed changes
   xrpl_testnet: [
     "https://xrpl.link",
     "https://testnet.xrpl.org",
@@ -31,6 +55,7 @@ const IPFS_GATEWAYS = [
   "https://ipfs.fleek.co/ipfs/",
   "https://ipfs.eternum.tech/ipfs/",
   "https://gateway.pinata.cloud/ipfs/",
+<<<<<<< Updated upstream
   "https://arweave.net/",
   "https://arweave.cloud/",
   "https://viewblock.io/arweave/",
@@ -47,6 +72,25 @@ const MAX_NFTS_PER_PAGE = 400;
 const MAX_ENRICH_TOKENS = 10;
 const META_BATCH = 5;
 const ENRICH_BATCH = 2;
+=======
+  "https://nftstorage.link/ipfs/",
+  "https://arweave.net/",
+];
+
+// Cache TTLs (ms)
+const TTL_TOKENS = 5 * 60_000; // 5 min — price data refreshes often
+const TTL_NFTS = 10 * 60_000; // 10 min — NFT listings change less often
+const TTL_ACCOUNT = 60_000; // 1 min — account summaries (frequent updates possible)
+
+// Hard limits to keep responses fast
+const MAX_LEDGER_PAGES = 6;
+const MAX_NFTS_PER_PAGE = 300;
+const MAX_ENRICH_TOKENS = 40;
+const META_BATCH = 8;
+const ENRICH_BATCH = 6;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 
 export interface SellOffer {
   index: string;
@@ -77,15 +121,35 @@ export interface NftItem {
   collection: string;
   flags: number;
   transferFee: number;
+<<<<<<< Updated upstream
   nftStandard: "XLS-14" | "XLS-20";
   sellOffers: SellOffer[];
   buyOffers: BuyOffer[];
+=======
+  nftStandard: "XLS-20" | "XLS-14";
+  sellOffers?: SellOffer[]; // full offers (when requested)
+  buyOffers?: BuyOffer[];
+  sellOffersCount?: number; // lazy default
+  buyOffersCount?: number;
+>>>>>>> Stashed changes
 }
 
-export interface TokenItem {
+export interface loadNfts {
+  nftItems: NftItem[];
+  marker?: string;
+}
+
+export interface EnhancedToken {
   currency: string;
-  currencyDisplay: string;
+  name: string;
+  symbol: string;
+  icon: string;
+  balance: string;
+  worthUsd?: number;
+  ripplingEnabled: boolean;
+  maxAmount: string;
   issuer: string;
+<<<<<<< Updated upstream
   issuerName?: string;
   domain?: string;
   logoUrl?: string;
@@ -113,17 +177,59 @@ export interface TokenChartData {
   low24h: number;
   prices: { time: number; value: number }[];
   updatedAt: string;
+=======
 }
 
-export interface NftResponse {
+export interface ActivationInfo {
+  date: string;
+  activatedBy: string;
+  amount: string;
+>>>>>>> Stashed changes
+}
+
+export interface AccountSummary {
   success: boolean;
   network: string;
-  type: "nfts";
-  count: number;
-  nfts: NftItem[];
-  timestamp: string;
+  address: string;
+  balance: string;
+  totalWorthUsd?: number;
+  totalEscrowValue?: string;
+  accountInfo: {
+    status: string;
+    activated?: ActivationInfo;
+    domain?: string;
+    username?: string;
+    paystring?: string;
+    masterKeyDisabled: boolean;
+    regularKey?: string;
+    nextSequence: number;
+    kycStatus: string;
+  };
+  tokens: {
+    totalCount: number;
+    list: EnhancedToken[];
+  };
+  nfts: {
+    totalOwned: number;
+    totalSoldApprox: number;
+    offersCreated: Array<{ name: string; amount: string }>;
+    list: NftItem[];
+    listedCount: number;
+    totalSellOffers: number;
+    totalBuyOffers: number;
+  };
+  transactions?: Array<{
+    hash: string;
+    date: string;
+    type: string;
+    result: string;
+    fee: string;
+    changes: string;
+  }>;
+  queriedAt: string;
 }
 
+<<<<<<< Updated upstream
 export interface TokenResponse {
   success: boolean;
   network: string;
@@ -349,6 +455,120 @@ async function rpc(network: string, method: string, params: any) {
       } else if (json.error) {
         lastErr = new Error(json.error.message);
         throw lastErr;
+=======
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+export function getBithompBase(network: string): string {
+  return network.includes("xahau")
+    ? "https://xahau.bithomp.com/api/v2"
+    : "https://bithomp.com/api/v2";
+}
+
+export function decodeCurrency(currency: string): string {
+  if (!currency || currency.length <= 3) return currency;
+  if (/^[0-9A-Fa-f]{40}$/.test(currency)) {
+    try {
+      const bytes = Buffer.from(currency.padEnd(40, "0").slice(0, 40), "hex");
+      const str = bytes.toString("utf8").replace(/\0/g, "").trim();
+      if (str && /^[\x20-\x7E]+$/.test(str)) return str;
+    } catch {}
+  }
+  return currency;
+}
+
+export function decodeHexUri(hexUri: string): string {
+  if (!hexUri) return "";
+  try {
+    return Buffer.from(hexUri, "hex").toString("utf8");
+  } catch {
+    return hexUri;
+  }
+}
+
+export function hexToString(hex: string): string {
+  if (!hex) return "";
+  try {
+    let str = "";
+    for (let i = 0; i < hex.length; i += 2) {
+      const code = parseInt(hex.substr(i, 2), 16);
+      if (code) str += String.fromCharCode(code);
+    }
+    return str;
+  } catch {
+    return hex;
+  }
+}
+
+export function resolveIpfs(uri: string): string {
+  if (!uri) return "";
+  if (uri.startsWith("ipfs://")) return `${IPFS_GATEWAYS[0]}${uri.slice(7)}`;
+  if (uri.startsWith("http")) return uri;
+  if (/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy)/.test(uri))
+    return `${IPFS_GATEWAYS[0]}${uri}`;
+  return uri;
+}
+
+export function formatDate(input: number | string | Date): string {
+  try {
+    let date: Date;
+    if (typeof input === "number") {
+      // XRPL Ripple epoch: 946684800 seconds offset from Unix epoch
+      date = new Date((input + 946684800) * 1000);
+    } else if (typeof input === "string") {
+      date = new Date(input);
+    } else {
+      date = input;
+    }
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${month}/${day}/${year}`;
+  } catch {
+    return String(input);
+  }
+}
+
+export function formatAmount(
+  amount: string | number | { value: string; currency: string; issuer: string },
+  decimals = 6
+): string {
+  if (typeof amount === "object" && amount !== null) {
+    const val = parseFloat(amount.value);
+    const curr = decodeCurrency(amount.currency);
+    return `${val.toLocaleString(undefined, { maximumFractionDigits: decimals })} ${curr}`;
+  }
+  const num = typeof amount === "string" ? parseFloat(amount) : amount;
+  if (isNaN(num)) return "0";
+  return num.toLocaleString(undefined, { maximumFractionDigits: decimals });
+}
+
+// ─── RPC helper with node failover ───────────────────────────────────────────
+
+export async function rpc(
+  network: string,
+  method: string,
+  params: Record<string, unknown>
+): Promise<any> {
+  const nodes = NETWORK_NODES[network] || NETWORK_NODES.xrpl;
+  let lastErr: unknown;
+  for (const node of nodes) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(node, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method, params: [params] }),
+          signal: AbortSignal.timeout(15_000), // Increased to 15s
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { result?: any };
+        if (json.result?.error)
+          throw new Error(json.result.error_message || json.result.error);
+        return json.result;
+      } catch (e) {
+        lastErr = e;
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
+>>>>>>> Stashed changes
       }
     } catch (e) {
       lastErr = e;
@@ -358,10 +578,21 @@ async function rpc(network: string, method: string, params: any) {
   throw lastErr || new Error(`Failed to fetch from any ${network} RPC node`);
 }
 
+<<<<<<< Updated upstream
 export function getD1(platform: any): D1Database | null {
   const env = platform?.env;
   if (!env) return null;
   return env.DB;
+=======
+// ─── D1 accessor ──────────────────────────────────────────────────────────────
+
+export function getD1(
+  platform: Record<string, any> | undefined
+): D1Database | null {
+  if (!platform) return null;
+  const env = platform.env ?? platform;
+  return env?.xrpl05_cache ?? null;
+>>>>>>> Stashed changes
 }
 
 let _xrpPriceCache: { price: number; ts: number } | null = null;
@@ -374,6 +605,7 @@ async function fetchXrpPriceUsd() {
   const apis = [
     {
       url: "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd",
+<<<<<<< Updated upstream
       extract: (data: any) => data?.ripple?.usd,
     },
     {
@@ -383,6 +615,17 @@ async function fetchXrpPriceUsd() {
     {
       url: "https://api.coinbase.com/v2/prices/XRP-USD/spot",
       extract: (data: any) => parseFloat(data?.data?.amount),
+=======
+      extract: (d: any) => d?.ripple?.usd,
+    },
+    {
+      url: "https://api.coingecko.com/api/v3/simple/price?ids=xrp&vs_currencies=usd",
+      extract: (d: any) => d?.xrp?.usd,
+    },
+    {
+      url: "https://api.dexscreener.com/latest/dex/tokens/xrp",
+      extract: (d: any) => Number(d?.pairs?.[0]?.priceUsd) || undefined,
+>>>>>>> Stashed changes
     },
   ];
 
@@ -393,6 +636,7 @@ async function fetchXrpPriceUsd() {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) continue;
+<<<<<<< Updated upstream
       const data = await res.json();
       const price = api.extract(data);
       if (typeof price === "number" && !isNaN(price)) {
@@ -401,12 +645,27 @@ async function fetchXrpPriceUsd() {
       }
     } catch (e) {
       console.warn(`Failed to fetch XRP price from ${api.url}:`, e);
+=======
+      const price = api.extract(await res.json());
+      if (price && price > 0) {
+        _xrpPriceCache = { price, ts: Date.now() };
+        return price;
+      }
+    } catch {
+      continue;
+>>>>>>> Stashed changes
     }
   }
   throw new Error("Failed to fetch XRP price from any API");
 }
 
+<<<<<<< Updated upstream
 async function fetchMeta(uri: string, nftokenId?: string): Promise<{ image: string; name: string; description: string; collection: string; }> {
+=======
+// ─── NFT metadata fetcher (fallback when Bithomp unavailable) ───────────────
+
+export async function fetchMeta(uri: string) {
+>>>>>>> Stashed changes
   const empty = { image: "", name: "", description: "", collection: "" };
   if (!uri && !nftokenId) return empty;
 
@@ -493,11 +752,15 @@ async function fetchMeta(uri: string, nftokenId?: string): Promise<{ image: stri
 
   for (const url of urls) {
     try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      const r = await fetch(url, { signal: AbortSignal.timeout(6_000) });
       if (!r.ok) continue;
       const ct = r.headers.get("content-type") || "";
       if (ct.startsWith("image/")) return { ...empty, image: url };
+<<<<<<< Updated upstream
       const m: Record<string, any> = await r.json();
+=======
+      const m = (await r.json()) as Record<string, any>;
+>>>>>>> Stashed changes
       const img =
         m.image || m.image_url || m.artwork?.uri || m.properties?.image || "";
       return {
@@ -506,8 +769,12 @@ async function fetchMeta(uri: string, nftokenId?: string): Promise<{ image: stri
         description: m.description || m.details || "",
         collection: m.collection?.name || m.collection || m.series || "",
       };
+<<<<<<< Updated upstream
     } catch (e) {
       console.warn(`[marketplace] Generic fetchMeta failed for ${url}:`, e);
+=======
+    } catch {
+>>>>>>> Stashed changes
       continue;
     }
   }
@@ -515,6 +782,7 @@ async function fetchMeta(uri: string, nftokenId?: string): Promise<{ image: stri
   return empty;
 }
 
+<<<<<<< Updated upstream
 async function getSellOffers(network: string, nft_id: string): Promise<SellOffer[]> {
   const r = await rpc(network, "nft_sell_offers", {
     nft_id,
@@ -1016,16 +1284,33 @@ async function fetchTokenChartData(
 }
 
 export async function loadTokens(
-  network: string,
-  limit: number,
-  db: D1Database | null,
-): Promise<TokenResponse> {
-  const key = cacheKey("tokens_v3", network, limit);
+=======
+export async function loadNfts{
 
-  const { data } = await cachedFetch<TokenResponse>(
+}
+
+// ─── PUBLIC API ───────────────────────────────────────────────────────────────
+
+// Optional: future account summary caching wrapper (used in routeLoader$)
+export async function loadAccountSummary(
+>>>>>>> Stashed changes
+  network: string,
+  address: string,
+  limit: number,
+  db: D1Database | null
+): Promise<AccountSummary> {
+  const key = cacheKey(
+    "account_summary_v1",
+    network,
+    address.toLowerCase(),
+    limit
+  );
+
+  const { data } = await cachedFetch<AccountSummary>(
     db,
     key,
     async () => {
+<<<<<<< Updated upstream
       const xrpPrice = await fetchXrpPriceUsd();
       const isXahau = network.includes("xahau");
 
@@ -1068,47 +1353,14 @@ export async function loadTokens(
         timestamp: new Date().toISOString(),
         xrpPriceUsd: xrpPrice,
       };
+=======
+      // Full logic would live in API route — this is just placeholder structure
+      // In real use, the API route computes it and calls writeCache
+      throw new Error("Computed in API route");
+>>>>>>> Stashed changes
     },
-    TTL_TOKENS,
-  );
-
-  return data;
-}
-
-export async function loadNfts(
-  network: string,
-  limit: number,
-  db: D1Database | null,
-): Promise<NftResponse> {
-  const key = cacheKey("nfts_v3", network, limit);
-
-  const { data } = await cachedFetch<NftResponse>(
-    db,
-    key,
-    async () => {
-      const isXahau = network.includes("xahau");
-      const half = Math.ceil(limit / 2);
-
-      const [xls20, xls14] = await Promise.allSettled([
-        fetchXLS20Nfts(network, limit),
-        isXahau ? fetchXLS14Nfts(network, half) : Promise.resolve([] as NftItem[]),
-      ]);
-
-      const nfts: NftItem[] = [
-        ...(xls20.status === "fulfilled" ? xls20.value : []),
-        ...(xls14.status === "fulfilled" ? xls14.value : []),
-      ].slice(0, limit);
-
-      return {
-        success: true,
-        network,
-        type: "nfts" as const,
-        count: nfts.length,
-        nfts,
-        timestamp: new Date().toISOString(),
-      };
-    },
-    TTL_NFTS,
+    TTL_ACCOUNT,
+    3_600_000 // 1 hour max age
   );
 
   return data;

@@ -6,9 +6,14 @@ import {
   useComputed$,
   $,
 } from "@builder.io/qwik";
+<<<<<<< Updated upstream
 import { useWalletContext } from "~/context/wallet-context";
 import { useNetworkContext } from "~/context/network-context";
 import { truncateAddress } from "~/lib/store/wallet";
+=======
+import { useWalletContext, truncateAddress } from "~/hooks/useWallet";
+import { useNetworkContext } from "~/hooks/useNetwork";
+>>>>>>> Stashed changes
 
 // ────────────────────────────────────────────────
 // Types
@@ -583,7 +588,11 @@ export default component$(() => {
           ? `&marker=${marketData.value.marker}`
           : "";
       const res = await fetch(
+<<<<<<< Updated upstream
         `/api/marketplace?network=${networkCtx.activeNetwork.value}&address=${address}&limit=5${markerParam}`,
+=======
+        `/api/marketplace?network=${activeNetwork.value}&address=${address}&limit=50`,
+>>>>>>> Stashed changes
       );
 
       if (!res.ok) {
@@ -767,6 +776,7 @@ export default component$(() => {
 
         {account.value && (
           <div class="bento">
+<<<<<<< Updated upstream
             {/* Account Card */}
             <div class="card p-6 md:p-8 bg-linear-to-br from-blue-50 to-white">
               <div class="flex items-center gap-4 mb-6">
@@ -805,6 +815,42 @@ export default component$(() => {
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
+=======
+            {/* Account and Tokens - Square Cards Row */}
+            <div class="account-tokens-row">
+              {/* Account Information */}
+              <div class="card square-card">
+                <div class="header">Account Information</div>
+                <div class="body">
+                  {!account.value ? (
+                    <div class="flex items-center justify-center py-10">
+                      <div class="spinner" />
+                    </div>
+                  ) : (
+                    <div>
+                      {account.value.urlgravatar && (
+                        <img
+                          src={account.value.urlgravatar}
+                          alt="Avatar"
+                          width={200}
+                          height={200}
+                          style={{
+                            borderRadius: "50%",
+                            marginBottom: "1rem",
+                            display: "block",
+                          }}
+                        />
+                      )}
+
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <strong
+                          style={{
+                            color: "#6b7280",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginBottom: "0.25rem",
+                          }}
+>>>>>>> Stashed changes
                         >
                           <path
                             stroke-linecap="round"
@@ -820,6 +866,7 @@ export default component$(() => {
                 </div>
               </div>
 
+<<<<<<< Updated upstream
               <div class="grid grid-cols-2 gap-4">
                 <div class="bg-white rounded-xl p-4 border border-blue-100 shadow-sm">
                   <p class="text-sm text-gray-500 font-medium mb-1">Balance</p>
@@ -834,6 +881,24 @@ export default component$(() => {
                         : "XAH"}
                     </span>
                   </p>
+=======
+              {/* Tokens & Trustlines */}
+              <div class="card square-card">
+                <div class="header">
+                  {!account.value ? (
+                    "TOKENS"
+                  ) : (
+                    <>
+                      {lines.value.length} TOKENS{" "}
+                      {wallet.connected.value && (
+                        <a
+                          href="#"
+                          style={{ color: "#3b82f6", fontSize: "0.75rem" }}
+                        ></a>
+                      )}
+                    </>
+                  )}
+>>>>>>> Stashed changes
                 </div>
                 <div class="bg-white rounded-xl p-4 border border-blue-100 shadow-sm">
                   <p class="text-sm text-gray-500 font-medium mb-1">Sequence</p>
